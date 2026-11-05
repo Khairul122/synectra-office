@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react';
-
-const ownerKey = (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_WHATSAPP_OWNER_KEY;
-const ownerHeaders: Record<string, string> = ownerKey ? { 'x-whatsapp-owner-key': ownerKey } : {};
 import { createRoot } from 'react-dom/client';
+import { OfficeSpikeView } from './office3d/OfficeSpikeView';
 import {
   healthResponseSchema,
   whatsappPairStatusSchema,
   whatsappSendPdfResponseSchema,
   type WhatsappPairStatus
 } from '@synectra/contracts';
+
+const ownerKey = (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_WHATSAPP_OWNER_KEY;
+const ownerHeaders: Record<string, string> = ownerKey ? { 'x-whatsapp-owner-key': ownerKey } : {};
 
 function App() {
   const [serverHealth, setServerHealth] = useState('Memeriksa...');
@@ -116,12 +117,23 @@ function App() {
           SYNECTRA OFFICE
         </h1>
         <p style={{ margin: 0, color: '#A0AEC0', fontSize: '0.95rem' }}>
-          Fase 0 — Integrasi Baileys WhatsApp & Nota Sintetis
+          Fase 0 — Spike 3D Ruang Kantor & Humanoid Artikulasi (T04) & WhatsApp Bridge (T03)
         </p>
         <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.85rem', color: '#718096' }}>
           Server API: <strong style={{ color: serverHealth === 'Aktif' ? '#48BB78' : '#F56565' }}>{serverHealth}</strong>
         </p>
       </header>
+
+      {/* 3D Office Spike (T04) */}
+      <section
+        style={{
+          width: '100%',
+          maxWidth: '960px',
+          marginBottom: '2rem'
+        }}
+      >
+        <OfficeSpikeView />
+      </section>
 
       <section
         style={{
