@@ -15,7 +15,8 @@ import { registerOfficeRoutes } from '../modules/office/presentation/office-rout
 import { setOfficeStatusStore } from '../modules/office/application/office-event-service';
 import { createOfficeStatusStore } from '../modules/office/infrastructure/office-status-store';
 import { registerHermesRoutes } from '../modules/hermes/presentation/hermes-route';
-import { setHermesModelClient, setHermesStore } from '../modules/hermes/application/hermes-service';
+import { runStaffEvaluation, setHermesModelClient, setHermesStore } from '../modules/hermes/application/hermes-service';
+import { setHermesAgentRunner, STAFF_EVALUATION_SCRIPT } from '../modules/hermes/application/hermes-agent';
 import { createRouterModelClient, type HermesModelClient } from '../infrastructure/hermes-model';
 import { createHermesStore } from '../modules/hermes/infrastructure/hermes-store';
 import { registerKanbanRoutes } from '../modules/kanban/presentation/kanban-route';
@@ -30,6 +31,8 @@ import { defaultHermesCliRunner } from '../infrastructure/hermes-cli';
 import { createTaskLinkStore } from '../modules/kanban/infrastructure/task-link-store';
 import { registerCalendarRoutes } from '../modules/calendar/presentation/calendar-route';
 import {
+  getAppJobExecutor,
+  setAppJobExecutor,
   setCalendarStore,
   setHermesCronRunner,
   type CalendarStore,
@@ -82,6 +85,8 @@ export function buildApp(opts?: {
   hermesHealthProbe?: boolean;
   /** null = paksa parser deterministik; undefined = router dari env (HERMES_ROUTER_API_KEY). */
   hermesModelClient?: HermesModelClient | null;
+  /** Runner agen Hermes asli untuk chat bebas & evaluasi karyawan. Tanpa ini chat memakai router/parser lama. */
+  hermesAgentRunner?: HermesCliRunner;
 }) {
   const app = Fastify({
     logger: {
@@ -159,6 +164,14 @@ export function buildApp(opts?: {
   }
 
   registerCalendarRoutes(app);
+
+  setHermesAgentRunner(opts?.hermesAgentRunner ?? null);
+  if (opts?.hermesAgentRunner) {
+    const fallback = getAppJobExecutor();
+    setAppJobExecutor((input) => input.schedule.script === STAFF_EVALUATION_SCRIPT
+      ? runStaffEvaluation(input.ownerId, input.schedule.timeoutMs)
+      : fallback(input));
+  }
 
   // Graceful shutdown hooks
   if (opts?.calendarScheduler) {

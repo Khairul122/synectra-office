@@ -47,6 +47,8 @@ export interface SimPanelProps {
   state?: ActorUiState;
   /** Status operasi nyata dari server (teks) bila ada. */
   realStatus: string;
+  /** Status kerja real-time dari server; undefined = belum terhubung (atau bukan karyawan). */
+  work?: { active: boolean; activity: string | null };
   lastEvent?: string;
   following: boolean;
   onClose: () => void;
@@ -56,7 +58,7 @@ export interface SimPanelProps {
 }
 
 /** Panel karakter terpilih: potret, mood, aksi saat ini, antrean, dan bilah kebutuhan. */
-export function SimPanel({ id, index, name, role, portrait, state, realStatus, lastEvent, following, onClose, onOpen, onFollow, children }: SimPanelProps) {
+export function SimPanel({ id, index, name, role, portrait, state, realStatus, work, lastEvent, following, onClose, onOpen, onFollow, children }: SimPanelProps) {
   const intent = state?.intent;
   const mood = state?.mood ?? 'santai';
   return <section className="hud-sim-panel" aria-labelledby={`sim-${id}-name`}>
@@ -69,11 +71,11 @@ export function SimPanel({ id, index, name, role, portrait, state, realStatus, l
       </div>
       <button type="button" className="sim-close" onClick={onClose} aria-label={`Tutup panel ${name}`}>×</button>
     </div>
-    <div className={`sim-action${intent?.real ? ' is-real' : ''}`}>
+    <div className={`sim-action${work?.active || (!work && intent?.real) ? ' is-real' : ''}`}>
       <span className="sim-action-icon">{intent ? <LifeIcon name={state?.moving ? 'stretch' : intent.icon} /> : null}</span>
       <div>
-        <strong>{state?.moving ? `Menuju: ${intent?.label ?? '…'}` : intent?.label ?? 'Menunggu adegan'}</strong>
-        <span className="sim-badge">{intent?.real ? 'Operasi nyata' : 'Simulasi dekoratif'}</span>
+        <strong>{id === 'reception' ? realStatus : !work ? 'Status belum tersedia' : work.active ? `Bekerja · ${work.activity}` : 'Idle · tidak ada operasi'}</strong>
+        <span className="sim-badge">{id === 'reception' || work ? 'Status real-time' : 'Tidak terhubung ke server'}</span>
       </div>
     </div>
     {state && state.queue.length > 0 && <ol className="sim-queue" aria-label="Antrean aksi">{state.queue.map((item, i) => <li key={i} title={item.label}><LifeIcon name={item.icon} /><span>{item.label}</span></li>)}</ol>}

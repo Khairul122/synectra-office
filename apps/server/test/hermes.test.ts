@@ -380,3 +380,41 @@ test('hermes model intent: natural language draft, history, and safe fallbacks',
     resetHermesDataForTests();
   }
 });
+
+test('chat bebas dan evaluasi harian dijawab agen Hermes asli dengan data nyata', async () => {
+  const { setHermesAgentRunner } = await import('../src/modules/hermes/application/hermes-agent');
+  const { ensureStaffEvaluationSchedule, runStaffEvaluation } = await import('../src/modules/hermes/application/hermes-service');
+  const { createMemoryCalendarStore, getCalendarStore, setCalendarStore } = await import('../src/modules/calendar/application/calendar-service');
+  resetHermesDataForTests();
+  resetBusinessDataForTests();
+  resetInvoiceDataForTests();
+  resetPaymentDataForTests();
+  setCalendarStore(createMemoryCalendarStore());
+  const ownerId = 'agent-owner';
+  const calls: string[][] = [];
+  let reply = { stdout: 'Pendapatan terverifikasi Rp0.\r\n', stderr: 'session_id: x', exitCode: 0 };
+  setHermesAgentRunner(async (args) => { calls.push(args); return reply; });
+  try {
+    const answer = await executeHermesTurn({ ownerId, text: 'jumlah pendapatan' });
+    assert.equal(answer.usage.adapter, 'agent');
+    assert.equal(answer.message.text, 'Pendapatan terverifikasi Rp0.');
+    const prompt = calls[0]!.at(-1)!;
+    assert.match(prompt, /pendapatan terverifikasi total Rp0/);
+    assert.match(prompt, /Hermes \(Lead\): status sekarang BEKERJA/);
+    assert.ok(prompt.endsWith('jumlah pendapatan'));
+    assert.ok(!calls[0]!.join(' ').includes('terminal'));
+
+    await runStaffEvaluation(ownerId);
+    const { messages } = await getHermesConversationStatus(ownerId);
+    assert.match(messages.at(-1)!.text, /^Evaluasi kinerja harian/);
+    await Promise.all([ensureStaffEvaluationSchedule(ownerId), ensureStaffEvaluationSchedule(ownerId)]);
+    const schedules = await getCalendarStore().listSchedules(ownerId);
+    assert.deepEqual(schedules.map(s => [s.script, s.schedule]), [['staff_evaluation', 'daily 10:00']]);
+
+    reply = { stdout: '', stderr: 'hermes-refusal-reason: MAX_CONCURRENT_SESSIONS', exitCode: 1 };
+    assert.match((await executeHermesTurn({ ownerId, text: 'apa kabar kantor' })).message.text, /batas 1 sesi aktif/);
+    await assert.rejects(runStaffEvaluation(ownerId));
+  } finally {
+    setHermesAgentRunner(null);
+  }
+});

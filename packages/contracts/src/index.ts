@@ -290,7 +290,7 @@ export type HermesToolProgress = z.infer<typeof hermesToolProgressSchema>;
 
 export const hermesUsageSchema = z.object({
   profile: z.literal('synectra-office'),
-  adapter: z.enum(['local', 'deterministic', 'router']),
+  adapter: z.enum(['local', 'deterministic', 'router', 'agent']),
   budgetSeconds: z.number().int().positive(),
   actualCostUsd: z.number().nonnegative().nullable()
 });

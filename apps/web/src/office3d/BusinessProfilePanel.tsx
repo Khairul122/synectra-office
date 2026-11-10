@@ -79,8 +79,8 @@ export function BusinessProfilePanel({ csrfToken }: { csrfToken: string | null }
       <label>Atas nama<input maxLength={120} value={form.bankAccountName} onChange={set('bankAccountName')} /></label>
       <label className="ui-span-all">Catatan di nota (opsional)<textarea maxLength={500} rows={2} value={form.invoiceNotes} onChange={set('invoiceNotes')} placeholder="cth: Denda 2% per bulan untuk keterlambatan pembayaran." /></label>
 
-      {error && <p role="alert" className="ui-span-all">{error}</p>}
-      {message && <p role="status" className="ui-span-all">{message}</p>}
+      {error && <p role="alert" className="ui-toast">{error}</p>}
+      {message && <p role="status" className="ui-toast">{message}</p>}
       <div className="ui-actions ui-actions--end"><button type="submit" className="primary-button" disabled={saving}>{saving ? 'Menyimpan…' : 'Simpan profil'}</button></div>
     </form>
   </details>;

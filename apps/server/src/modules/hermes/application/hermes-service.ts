@@ -18,6 +18,8 @@ import { getPaymentSummary } from '../../payment/application/payment-service';
 import { createApprovalAndEnqueue } from '../../deliveries/application/delivery-service';
 import { listReceiptJobs } from '../../deliveries/application/receipt-jobs';
 import { getOfficeSnapshots } from '../../office/application/office-event-service';
+import { createSchedule, getCalendarStore } from '../../calendar/application/calendar-service';
+import { askHermesAgent, hermesAgentEnabled, HermesAgentError, STAFF_EVALUATION_PROMPT, STAFF_EVALUATION_SCRIPT } from './hermes-agent';
 
 export type HermesAuditRecord = {
   id: string;
@@ -164,7 +166,7 @@ export function parseDraftRequest(text: string): { clientQuery?: string; unitPri
   return { clientQuery: clientQuery || undefined, unitPrice, description };
 }
 
-function getUsage(adapter: HermesUsage['adapter'] = modelClient ? 'router' : 'deterministic'): HermesUsage {
+function getUsage(adapter: HermesUsage['adapter'] = hermesAgentEnabled() ? 'agent' : modelClient ? 'router' : 'deterministic'): HermesUsage {
   return {
     profile: 'synectra-office',
     adapter,
@@ -599,7 +601,15 @@ export async function executeHermesTurn(params: {
     if (fromModel) adapter = 'router';
     const intent = fromModel ?? deterministicIntent(text);
     // Parser lokal tidak bisa menjawab pertanyaan bebas: jujur soal itu, jangan balas sapaan generik.
-    if (!fromModel && intent.kind === 'chat' && !GREETING_PATTERN.test(text)) {
+    if (intent.kind === 'chat' && hermesAgentEnabled()) {
+      // Pertanyaan bebas dijawab agen Hermes asli dengan lampiran data nyata, bukan oleh prompt aplikasi ini.
+      try {
+        outcome = { progress: [], text: await askHermesAgent(ownerId, text) };
+        adapter = 'agent';
+      } catch (error) {
+        outcome = { progress: [], text: error instanceof HermesAgentError ? error.message : 'Agen Hermes gagal dihubungi. Coba lagi sebentar lagi.' };
+      }
+    } else if (!fromModel && intent.kind === 'chat' && !GREETING_PATTERN.test(text)) {
       outcome = { progress: [], text: client ? MODEL_UNAVAILABLE : LOCAL_MODE_HELP };
     } else {
       outcome = await executeIntent(ownerId, intent);
@@ -620,7 +630,47 @@ export async function executeHermesTurn(params: {
   } finally { finishActivity(); }
 }
 
+/** Evaluasi kinerja karyawan oleh Hermes dari data nyata; hasilnya masuk ke percakapan Hermes. Gagal = throw, tidak ada evaluasi tiruan. */
+export async function runStaffEvaluation(ownerId: string, timeoutMs?: number): Promise<{ summary: string; isChanged: boolean }> {
+  const finishActivity = beginStaffActivity(ownerId, 'hermes', 'Mengevaluasi kinerja karyawan');
+  try {
+    const report = await askHermesAgent(ownerId, STAFF_EVALUATION_PROMPT, { timeoutMs, session: 'evaluasi' });
+    const text = `Evaluasi kinerja harian
+
+${report}`.slice(0, 4000);
+    await activeStore.appendTurn(ownerId, [{ id: randomUUID(), role: 'hermes', text, progress: [], createdAt: new Date().toISOString() }]);
+    return { summary: `Evaluasi kinerja karyawan selesai: ${report.replace(/\s+/g, ' ').slice(0, 200)}`, isChanged: true };
+  } finally { finishActivity(); }
+}
+
+const ensuringEvaluation = new Map<string, Promise<void>>();
+
+/** Pastikan owner punya jadwal evaluasi harian 10:00 WIB. Jadwal yang dijeda tetap dihormati. */
+export function ensureStaffEvaluationSchedule(ownerId: string): Promise<void> {
+  let pending = ensuringEvaluation.get(ownerId);
+  if (!pending) {
+    pending = (async () => {
+      const existing = await getCalendarStore().listSchedules(ownerId, { type: 'app_job' });
+      if (existing.some(schedule => schedule.script === STAFF_EVALUATION_SCRIPT)) return;
+      await createSchedule(ownerId, {
+        name: 'Evaluasi kinerja karyawan oleh Hermes',
+        type: 'app_job',
+        actor: 'hermes',
+        schedule: 'daily 10:00',
+        timezone: 'Asia/Jakarta',
+        script: STAFF_EVALUATION_SCRIPT,
+        effects: 'Hermes membaca data kerja nyata lalu menulis laporan evaluasi ke percakapan Hermes',
+        timeoutMs: 240_000,
+        missedRunPolicy: 'catch_up'
+      });
+    })().finally(() => ensuringEvaluation.delete(ownerId));
+    ensuringEvaluation.set(ownerId, pending);
+  }
+  return pending;
+}
+
 export async function getHermesConversationStatus(ownerId: string) {
+  if (hermesAgentEnabled()) await ensureStaffEvaluationSchedule(ownerId).catch(() => undefined);
   const [session, messages] = await Promise.all([
     activeStore.getSession(ownerId),
     activeStore.listMessages(ownerId, MAX_MESSAGES_PER_OWNER)

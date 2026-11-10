@@ -122,8 +122,8 @@ export function FinancePanel({ mode, csrfToken, onChanged }: { mode: 'dashboard'
   return <section className="finance-panel" aria-labelledby={`finance-${mode}`}>
     <h2 id={`finance-${mode}`}>{mode === 'dashboard' ? 'Dashboard keuangan' : 'Pembayaran'}</h2>
     {loading && <p role="status">Memuat data…</p>}
-    {error && <p role="alert">{error} Data terakhir ditampilkan.</p>}
-    {notice && <p role="status">{notice}</p>}
+    {error && <p className="ui-toast" role="alert">{error} Data terakhir ditampilkan.</p>}
+    {notice && <p className="ui-toast" role="status">{notice}</p>}
     {mode === 'dashboard' ? <>
       <div className="finance-stats"><div><span>Klien</span><strong>{data.clients.length}</strong></div><div><span>Total tagihan</span><strong>{money(rows.reduce((sum, row) => sum + row.invoice.total, 0))}</strong></div><div><span>Sudah dibayar</span><strong>{money(rows.reduce((sum, row) => sum + row.paid, 0))}</strong></div><div><span>Sisa tagihan</span><strong>{money(rows.reduce((sum, row) => sum + row.remaining, 0))}</strong></div></div>
       <h3>Ringkasan tagihan</h3>

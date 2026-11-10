@@ -219,7 +219,7 @@ export function KanbanBoardPanel({ csrfToken, invoices }: Props) {
         </p>
       )}
     </div>
-    {error && <p className="kanban-error" role="alert">{error}</p>}
+    {error && <p className="ui-toast" role="alert">{error}</p>}
     <details className="kanban-create-disclosure"><summary>+ Buat tugas baru</summary><form className="kanban-create" onSubmit={createTask}>
       <h4>Buat tugas</h4>
       <label>Judul<input required maxLength={200} value={title} onChange={event => setTitle(event.target.value)} /></label>

@@ -110,6 +110,31 @@
 .tablet-screen[data-app] .tablet-content .ui-alert--compact { padding: 8px 12px; border: 0; font-weight: 500; }
 .tablet-screen[data-app] .tablet-content .ui-alert + .secondary-button { margin-bottom: 14px; }
 
+/* ---------- Toasts: action results pop up over the tablet like a device notification, then leave ---------- */
+/* ponytail: CSS-only, two toasts at once overlap; move to a toast queue if panels start firing several together. */
+.tablet-screen[data-app] .tablet-content [role].ui-toast.ui-toast {
+  position: absolute; z-index: 30; top: 48px; left: 50%; display: flex; align-items: center; gap: 12px;
+  width: max-content; max-width: min(440px, calc(100% - 32px)); margin: 0; padding: 12px 18px 12px 12px;
+  border: 1px solid var(--line); border-radius: 20px; background: var(--surface); color: var(--ink) !important;
+  box-shadow: 0 14px 36px #1f2b4033, 0 2px 6px #1f2b401a; font-size: 13px; font-weight: 600; line-height: 1.45;
+  animation: ui-toast 6s cubic-bezier(.2, .8, .2, 1) forwards;
+}
+.tablet-screen[data-app] .tablet-content [role].ui-toast.ui-toast::before {
+  content: "✓"; flex: none; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%;
+  background: var(--ok-bg); color: var(--ok-ink); font-size: 15px; font-weight: 700;
+}
+.tablet-screen[data-app] .tablet-content [role="alert"].ui-toast.ui-toast { animation-duration: 9s; }
+.tablet-screen[data-app] .tablet-content [role="alert"].ui-toast.ui-toast::before { content: "!"; background: var(--danger-bg); color: var(--danger-ink); }
+.tablet-screen[data-app] .tablet-content [role].ui-toast.ui-toast:hover { animation-play-state: paused; }
+@keyframes ui-toast {
+  0% { opacity: 0; transform: translate(-50%, -140%); }
+  7%, 92% { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, -140%); visibility: hidden; }
+}
+@media (prefers-reduced-motion: reduce) {
+  @keyframes ui-toast { 0%, 100% { opacity: 0; transform: translate(-50%, 0); } 7%, 92% { opacity: 1; transform: translate(-50%, 0); } 100% { visibility: hidden; } }
+}
+
 /* ---------- Stats ---------- */
 .tablet-screen[data-app] .tablet-content .finance-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin: 0 0 8px; }
 .tablet-screen[data-app] .tablet-content .finance-stats > div { position: relative; display: grid; gap: 8px; padding: 18px 18px 16px !important; overflow: hidden; }

@@ -438,13 +438,13 @@ export function OfficeSpikeView({ serverHealth, whatsappStatus, businessActivity
           {loaded && !error && (Object.entries(officeObjects) as [OfficeObjectId, typeof officeObjects[OfficeObjectId]][]).map(([id, object]) => {
             const member = team.findIndex(person => person.id === id);
             const staffStatus = member >= 0 && id !== 'reception' ? staffSnapshot?.staff[id as StaffId] : undefined;
-            const statusText = staffStatus ? staffStatus.active ? staffStatus.activity : 'Tidak ada operasi terpantau' : 'Status belum tersedia';
+            const statusText = staffStatus ? staffStatus.active ? `Bekerja: ${staffStatus.activity}` : 'Idle' : 'Status belum tersedia';
             const life = member >= 0 ? actorStates?.[id as ActorId] : undefined;
             return <button key={id} ref={element => {
               if (element) labelRefs.current.set(id, element); else labelRefs.current.delete(id);
               managerRef.current?.attachLabel(id, element);
             }} className={`object-label ${member >= 0 ? 'person-label' : 'prop-label'}${life?.intent.real || staffStatus?.active ? ' is-working' : ''}${selected === id || focusedActor === id ? ' selected' : ''}`} onClick={() => worldSelect.current(id)} aria-label={`Buka ${object.name}${member >= 0 && id !== 'reception' ? `, ${statusText}` : ''}`} title={object.name}>
-              {member >= 0 ? <><span className="label-bubble" aria-hidden="true">{life ? <LifeIcon name={life.moving ? 'stretch' : life.intent.icon} /> : null}<span>{life ? (life.moving ? `Menuju: ${life.intent.label}` : life.intent.label) : member === 3 ? decorativeActivity : statusText}</span></span><Portrait index={member} src={portraits[id as ActorId]} /><span>{object.name}</span><span className="label-dot" /></> : <><Icon name={id === 'coffee' ? 'coffee' : id === 'lounge' ? 'sofa' : id === 'board' ? 'board' : id === 'calendar' ? 'calendar' : id === 'terrace' ? 'waves' : 'note'} /><span>{object.name}</span></>}
+              {member >= 0 ? <><span className="label-bubble" aria-hidden="true">{life ? <LifeIcon name={life.moving ? 'stretch' : life.intent.icon} /> : null}<span>{staffStatus ? statusText : life ? (life.moving ? `Menuju: ${life.intent.label}` : life.intent.label) : member === 3 ? decorativeActivity : statusText}</span></span><Portrait index={member} src={portraits[id as ActorId]} /><span>{object.name}</span><span className="label-dot" /></> : <><Icon name={id === 'coffee' ? 'coffee' : id === 'lounge' ? 'sofa' : id === 'board' ? 'board' : id === 'calendar' ? 'calendar' : id === 'terrace' ? 'waves' : 'note'} /><span>{object.name}</span></>}
             </button>;
           })}
         </div>
@@ -541,8 +541,8 @@ export function OfficeSpikeView({ serverHealth, whatsappStatus, businessActivity
           const index = team.findIndex(member => member.id === focusedActor);
           const member = team[index]!;
           const staff = focusedActor === 'reception' ? undefined : staffSnapshot?.staff[focusedActor];
-          const realStatus = focusedActor === 'reception' ? `Status kerja: ${workStateLabel[displayedWorkState]}` : staff ? staff.active ? `Operasi nyata: ${staff.activity}` : actorStates?.[focusedActor]?.intent.real ? 'Operasi baru saja selesai di server' : 'Tidak ada operasi nyata saat ini' : 'Status operasi belum tersedia';
-          return <SimPanel id={focusedActor} index={index} name={member.name} role={member.role} portrait={portraits[focusedActor]} state={actorStates?.[focusedActor]} realStatus={realStatus}
+          const realStatus = focusedActor === 'reception' ? `Status kerja: ${workStateLabel[displayedWorkState]}` : staff ? staff.active ? `Bekerja: ${staff.activity}` : actorStates?.[focusedActor]?.intent.real ? 'Operasi baru saja selesai di server' : 'Idle: tidak ada operasi berjalan' : 'Status operasi belum tersedia';
+          return <SimPanel id={focusedActor} index={index} name={member.name} role={member.role} portrait={portraits[focusedActor]} state={actorStates?.[focusedActor]} realStatus={realStatus} work={staff}
             lastEvent={focusedActor === 'reception' ? undefined : staffEvents[focusedActor]} following={following}
             onClose={() => focusActor(null)} onOpen={() => select(focusedActor === 'reception' ? 'home' : focusedActor)}
             onFollow={() => { const next = !following; setFollowing(next); managerRef.current?.follow(next ? focusedActor : null); }}>

@@ -3,6 +3,7 @@ import { readConfig } from './bootstrap/config';
 import { WhatsappService } from './modules/whatsapp/application/whatsapp-service';
 import { BridgeManager } from './modules/whatsapp/infrastructure/bridge-manager';
 import { createCalendarScheduler } from './modules/calendar/application/calendar-scheduler';
+import { defaultHermesCliRunner } from './infrastructure/hermes-cli';
 import { createReceiptWorker } from './modules/deliveries/application/receipt-worker';
 
 try {
@@ -15,7 +16,8 @@ try {
     onReceiptQueued: () => { void receiptWorker.runOnce().catch(() => undefined); },
     whatsappOwnerKey: config.whatsappOwnerKey,
     calendarScheduler,
-    hermesHealthProbe: true
+    hermesHealthProbe: true,
+    hermesAgentRunner: defaultHermesCliRunner
   });
 
   const shutdown = async (signal: string) => {

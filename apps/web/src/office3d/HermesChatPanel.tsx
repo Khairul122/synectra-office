@@ -142,14 +142,14 @@ export function HermesChatPanel({ csrfToken, onActivity, onRefreshInvoices }: He
               <>
                 <span>Batas {usage.budgetSeconds} dtk</span>
                 <span>Biaya ${usage.actualCostUsd != null ? usage.actualCostUsd.toFixed(2) : '0.00'}</span>
-                <span>Mode {usage.adapter === 'router' ? 'model' : 'lokal'}</span>
+                <span>Mode {usage.adapter === 'agent' ? 'Hermes Agent' : usage.adapter === 'router' ? 'model' : 'lokal'}</span>
               </>
             )}
           </p>
         )}
       </section>
 
-      {error && <div role="alert" className="ui-alert ui-alert--danger">{error}</div>}
+      {error && <div role="alert" className="ui-toast">{error}</div>}
 
       <div className="ui-actions" aria-label="Contoh perintah">
         <button type="button" className="secondary-button" disabled={sending} onClick={() => void sendMessage('Buatkan draft nota untuk klien sebesar 150000 untuk konsultasi')}>

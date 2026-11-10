@@ -387,6 +387,14 @@ test('HTTP Calendar API endpoints: auth, overview, create, pause, run, and resol
   assert.equal(overview.timezone, 'Asia/Jakarta');
   assert.ok(Array.isArray(overview.schedules));
 
+  const missedRunsRes = await app.inject({
+    method: 'POST',
+    url: '/api/calendar/missed-runs/check',
+    headers: { cookie, 'x-csrf-token': csrf }
+  });
+  assert.equal(missedRunsRes.statusCode, 200);
+  assert.equal(typeof missedRunsRes.json().processed, 'number');
+
   // 3. POST /api/calendar/schedules
   const createRes = await app.inject({
     method: 'POST',

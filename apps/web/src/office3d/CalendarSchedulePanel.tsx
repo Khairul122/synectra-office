@@ -256,10 +256,7 @@ export function CalendarSchedulePanel({ csrfToken }: Props) {
     try {
       const res = await fetch('/api/calendar/missed-runs/check', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(csrfToken ? { 'x-csrf-token': csrfToken } : {})
-        }
+        headers: csrfToken ? { 'x-csrf-token': csrfToken } : {}
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -367,8 +364,8 @@ export function CalendarSchedulePanel({ csrfToken }: Props) {
           <strong>Perhatian:</strong> {overview.pendingReviewCount} jadwal terlambat menunggu persetujuan review.
         </div>
       )}
-      {error && <div className="ui-alert ui-alert--danger" role="alert">{error}</div>}
-      {actionMessage && <div className="ui-alert ui-alert--success" role="status">{actionMessage}</div>}
+      {error && <div className="ui-toast" role="alert">{error}</div>}
+      {actionMessage && <div className="ui-toast" role="status">{actionMessage}</div>}
 
       <div className="ui-tabs" role="toolbar" aria-label="Filter jenis jadwal">
         {[

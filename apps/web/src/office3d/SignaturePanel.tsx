@@ -88,7 +88,7 @@ export function SignaturePanel({ csrfToken, onSaved }: { csrfToken: string | nul
       <button type="button" className="secondary-button" onClick={clear} disabled={empty || saving}>Hapus</button>
       <button type="button" className="secondary-button" onClick={save} disabled={empty || saving}>{saving ? 'Menyimpan…' : 'Simpan tanda tangan'}</button>
     </div>
-    {message && <p role="status">{message}</p>}
-    {error && <p role="alert">{error}</p>}
+    {message && <p className="ui-toast" role="status">{message}</p>}
+    {error && <p className="ui-toast" role="alert">{error}</p>}
   </section>;
 }

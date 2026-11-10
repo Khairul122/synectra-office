@@ -37,13 +37,31 @@ function cleanup(ownerId: string, owner: OwnerActivity) {
 export function beginStaffActivity(ownerId: string, id: StaffId, activity: string): () => void {
   const owner = ownerActivity(ownerId);
   const token = Symbol();
+  const startedAt = Date.now();
   owner.tasks[id].set(token, activity);
   notify(ownerId, owner);
   return () => {
     if (!owner.tasks[id].delete(token)) return;
+    recordWork(ownerId, { staff: id, activity, startedAt: new Date(startedAt).toISOString(), durationMs: Date.now() - startedAt });
     notify(ownerId, owner);
     cleanup(ownerId, owner);
   };
+}
+
+export type StaffWorkRecord = { staff: StaffId; activity: string; startedAt: string; durationMs: number };
+// ponytail: log kerja di memori (maks 500/owner), hilang saat server restart; pindahkan ke Firestore bila evaluasi butuh riwayat lintas restart.
+const workLogs = new Map<string, StaffWorkRecord[]>();
+
+function recordWork(ownerId: string, record: StaffWorkRecord) {
+  const log = workLogs.get(ownerId) ?? [];
+  log.push(record);
+  if (log.length > 500) log.shift();
+  workLogs.set(ownerId, log);
+}
+
+/** Operasi nyata yang sudah selesai sejak `sinceMs` (epoch), urut lama -> baru. */
+export function listStaffWork(ownerId: string, sinceMs = 0): StaffWorkRecord[] {
+  return (workLogs.get(ownerId) ?? []).filter(record => Date.parse(record.startedAt) >= sinceMs);
 }
 
 export function subscribeStaffActivity(ownerId: string, listener: (snapshot: StaffSnapshot) => void): () => void {

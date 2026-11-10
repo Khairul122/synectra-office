@@ -364,6 +364,8 @@ function App() {
     try {
       const timeout = AbortSignal.timeout(10000);
       const res = await fetch('/whatsapp/pair-status', { signal: signal ? AbortSignal.any([signal, timeout]) : timeout });
+      // Sesi server hanya di memori: setelah server restart, pulihkan segera (polling ini paling sering berjalan).
+      if (res.status === 401 && auth?.currentUser && !loggingOut.current) void restoreSession(auth.currentUser).catch(() => undefined);
       if (!res.ok) throw new Error(res.status === 401 ? 'Sesi kantor belum aktif. Tunggu atau masuk kembali.' : 'Status WhatsApp tidak dapat dimuat.');
       const parsed = whatsappPairStatusSchema.parse(await res.json());
       if (!signal?.aborted && request === pairStatusRequest.current) { setPairStatus(parsed); setPairStatusError(null); }
@@ -574,8 +576,8 @@ function App() {
           <label>Total rupiah<input required type="number" min="0" step="1" value={invoicePrice} onChange={(event) => setInvoicePrice(event.target.value)} /></label>
           <button type="submit">Simpan draft nota</button>
         </form>
-        {invoiceError && <p role="alert">{invoiceError}</p>}
-        {deliveryError && <p role="alert">{deliveryError}</p>}
+        {invoiceError && <p className="ui-toast" role="alert">{invoiceError}</p>}
+        {deliveryError && <p className="ui-toast" role="alert">{deliveryError}</p>}
         <fieldset className="ui-card ui-fieldset">
           <legend>Pengaturan PDF &amp; pengiriman</legend>
           <label className="ui-span-all">Tanda tangan PNG<input ref={signatureFileRef} type="file" accept="image/png" onChange={(event) => { const file = event.target.files?.[0]; if (!file) { setSignatureData(''); return; } const reader = new FileReader(); reader.onload = () => setSignatureData(String(reader.result)); reader.readAsDataURL(file); }} /></label>
@@ -593,7 +595,7 @@ function App() {
         <p>Pilih nota terbit untuk membuat dan melihat PDF.</p>
         {invoicesLoading ? <p role="status">Memuat nota…</p> : invoiceError ? <p role="alert">{invoiceError}</p> : invoices.some(invoice => invoice.status === 'issued' || invoice.status === 'paid') ? <ul>{invoices.filter(invoice => invoice.status === 'issued' || invoice.status === 'paid').map(invoice => <li key={invoice.id}>{invoice.number ?? invoice.id} — {clients.find(client => client.id === invoice.clientId)?.name ?? 'Klien'}<button type="button" disabled={pdfLoading} onClick={() => handleGeneratePdf(invoice)}>Preview PDF</button></li>)}</ul> : <p>Belum ada nota terbit. Buka tab Nota, buat draft, lalu terbitkan nota.</p>}
         {pdfLoading && <p role="status">Membuat PDF…</p>}
-        {pdfError && <p role="alert">{pdfError}</p>}
+        {pdfError && <p className="ui-toast" role="alert">{pdfError}</p>}
         {pdfPreview && pdfPreview.owner === userEmail && <div className="pdf-preview"><h3>Preview {pdfPreview.label}</h3><iframe title={`Preview PDF ${pdfPreview.label}`} src={`/api/invoice-pdfs/${pdfPreview.id}`} /><a href={`/api/invoice-pdfs/${pdfPreview.id}`} target="_blank" rel="noopener noreferrer">Buka atau unduh PDF</a></div>}
       </section>
     }
@@ -608,7 +610,7 @@ function App() {
           <label>Alamat (opsional, dicetak di nota)<input maxLength={300} value={clientAddress} onChange={event => setClientAddress(event.target.value)} /></label>
           <div className="finance-actions"><button type="submit" disabled={clientBusy}>{clientBusy ? 'Menyimpan...' : editingClientId ? 'Simpan perubahan' : 'Simpan klien'}</button>{editingClientId && <button type="button" className="secondary-button" disabled={clientBusy} onClick={() => { clearClientForm(); setClientError(null); setClientNotice(null); }}>Batal edit</button>}</div>
         </form>
-        {clientError && <p role="alert">{clientError}</p>}{clientLoadError && <p role="alert">{clientLoadError}</p>}{clientNotice && <p role="status">{clientNotice}</p>}
+        {clientError && <p className="ui-toast" role="alert">{clientError}</p>}{clientLoadError && <p role="alert">{clientLoadError}</p>}{clientNotice && <p className="ui-toast" role="status">{clientNotice}</p>}
         <label>Cari klien<input value={clientSearch} onChange={event => setClientSearch(event.target.value)} /></label>
         <h3>Klien</h3>
         {matchingClients.length === 0 ? <p>{clientLoadError && clients.length === 0 ? 'Daftar klien belum tersedia.' : clients.length === 0 ? 'Belum ada klien yang disimpan.' : 'Tidak ada klien yang cocok dengan pencarian.'}</p> :
@@ -677,7 +679,7 @@ function App() {
 
         <section className="ui-stack" aria-labelledby="deliveries-title">
           <h3 id="deliveries-title" className="ui-section-label">Outbox pengiriman nota PDF <span>{deliveries.length}</span></h3>
-          {deliveryError && <div className="ui-alert ui-alert--danger" role="alert">{deliveryError}</div>}
+          {deliveryError && <div className="ui-toast" role="alert">{deliveryError}</div>}
           {deliveries.length === 0 ? (
             <p className="ui-empty">Belum ada antrean pengiriman nota.</p>
           ) : (
