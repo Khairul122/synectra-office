@@ -9,6 +9,7 @@ import { invoiceHtml } from './pdf-template';
 import { getCurrentSignature, readSignature } from './signature-service';
 import { getInvoicePaymentDetails, paymentFingerprint } from '../../payment/application/payment-service';
 import { publishBusinessEvent } from '../../office/application/office-event-service';
+import { beginStaffActivity } from '../../office/application/staff-activity';
 
 const useFirestore = process.env.FIREBASE_USE_FIRESTORE === 'true';
 const chromium = process.env.CHROMIUM_PATH ?? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
@@ -18,6 +19,8 @@ function ownerRef(ownerId: string) { return getAppFirestore().collection('owners
 function pdfRef(ownerId: string, id: string) { return ownerRef(ownerId).collection('file_assets').doc(id); }
 function runChromium(input: string, output: string) { return new Promise<void>((resolve, reject) => { const child = spawn(chromium, ['--headless', '--disable-gpu', '--no-sandbox', '--disable-network', '--no-pdf-header-footer', `--print-to-pdf=${output}`, input], { stdio: 'ignore' }); child.on('error', reject); child.on('exit', (code) => code === 0 ? resolve() : reject(new Error(`Chromium exited ${code}`))); }); }
 export async function generateInvoicePdf(ownerId: string, invoiceId: string) {
+  const finishActivity = beginStaffActivity(ownerId, 'admin', 'Membuat PDF');
+  try {
   const invoice = await getInvoice(ownerId, invoiceId); if (!invoice) throw new Error('Invoice not found');
   if (invoice.status !== 'issued' && invoice.status !== 'paid') throw new Error('Invoice must be issued');
   const signature = await getCurrentSignature(ownerId); if (!signature) throw new Error('Signature not configured');
@@ -37,6 +40,7 @@ export async function generateInvoicePdf(ownerId: string, invoiceId: string) {
     publishBusinessEvent({ type: 'pdf_generated', ownerId, invoiceId, invoiceNumber: invoice.number, status: { workState: 'working', heartbeatAt: Date.now(), activity: 'PDF nota selesai dibuat' } }).catch(() => undefined);
     return asset;
   } catch (error) { await unlink(temporary).catch(() => undefined); if (renamed) await unlink(target).catch(() => undefined); await unlink(htmlPath).catch(() => undefined); throw error; }
+  } finally { finishActivity(); }
 }
 export async function getPdfAsset(ownerId: string, id: string) { if (useFirestore) { const snapshot = await pdfRef(ownerId, id).get(); return snapshot.exists ? snapshot.data() as PdfAsset : null; } return pdfs.get(`${ownerId}:${id}`) ?? null; }
 export async function findLatestPdfAssetForInvoice(ownerId: string, invoiceId: string): Promise<PdfAsset | null> {

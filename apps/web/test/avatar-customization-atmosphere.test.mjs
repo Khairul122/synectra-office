@@ -16,12 +16,14 @@ import {
 } from '../src/office3d/avatar-storage.ts';
 import { OfficeAudioEngine } from '../src/office3d/office-audio.ts';
 import { officeObjects, expansionRooms } from '../src/office3d/office-data.ts';
-import { destinations, routeBetween } from '../src/office3d/office-navigation.ts';
+import { NavGrid } from '../src/office3d/world/navigation.ts';
+import { SPOTS, BUILDING, TERRACE_DOOR } from '../src/office3d/world/layout.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const cssPath = resolve(__dirname, '../src/office3d/office.css');
 const spikeViewPath = resolve(__dirname, '../src/office3d/OfficeSpikeView.tsx');
-const sceneManagerPath = resolve(__dirname, '../src/office3d/scene-manager-2d.ts');
+const sceneManagerPath = resolve(__dirname, '../src/office3d/scene-manager-3d.ts');
+const worldPath = resolve(__dirname, '../src/office3d/world/office-world.ts');
 
 function createMockStorage(initial = {}) {
   const store = new Map(Object.entries(initial));
@@ -134,27 +136,24 @@ test('office-audio: synthesizes audio via Web Audio API without external file de
   });
 });
 
-test('scene-manager-2d: renders terrace pool with exact turquoise accent #388DA7 and atmosphere overlays', () => {
+test('3D office renders terrace pool with exact turquoise accent #388DA7 and day/sunset/night atmosphere', () => {
   const sceneCode = readFileSync(sceneManagerPath, 'utf8');
+  const worldCode = readFileSync(worldPath, 'utf8');
 
-  // Water color must be exact #388DA7
-  assert.match(sceneCode, /#388DA7/);
-  assert.match(sceneCode, /ctx\.fillStyle\s*=\s*['"]#388DA7['"]/);
+  // Air kolam memakai warna turquoise #388DA7 persis.
+  assert.match(worldCode, /#388DA7/);
+  assert.match(worldCode, /ctx\.fillStyle\s*=\s*['"]#388DA7['"]/);
+  assert.match(worldCode, /POOL/);
 
-  // Terrace pool coordinates and geometry
-  assert.match(sceneCode, /points\.terrace/);
-  assert.match(sceneCode, /ctx\.ellipse\(tx,\s*ty\s*\+\s*12/);
+  // Tiga fase suasana pada cahaya dunia 3D.
+  assert.match(worldCode, /cycle\s*===\s*['"]sunset['"]/);
+  assert.match(worldCode, /cycle\s*===\s*['"]night['"]/);
+  assert.match(sceneCode, /cycle\s*===\s*['"]night['"]/);
 
-  // Atmosphere 3-phase overlays
-  assert.match(sceneCode, /this\.atmosphere\s*===\s*['"]sunset['"]/);
-  assert.match(sceneCode, /this\.atmosphere\s*===\s*['"]night['"]/);
-  assert.match(sceneCode, /rgba\(251,\s*146,\s*60/); // Warm sunset tint
-  assert.match(sceneCode, /rgba\(15,\s*23,\s*42/);   // Deep night tint
-
-  // Backward compatibility with daylight toggle
+  // Kompatibilitas toggle siang lama.
   assert.match(sceneCode, /public\s+setDaylight\((?:value|daylight):\s*boolean\)/);
 
-  // Owner avatar customization rendering
+  // Kustomisasi avatar pemilik diterapkan ke karakter 3D.
   assert.match(sceneCode, /this\.avatar\.hairStyle/);
   assert.match(sceneCode, /this\.avatar\.hairColor/);
   assert.match(sceneCode, /this\.avatar\.outfitStyle/);
@@ -162,20 +161,26 @@ test('scene-manager-2d: renders terrace pool with exact turquoise accent #388DA7
   assert.match(sceneCode, /this\.avatar\.accentColor/);
 });
 
-test('terrace navigation: destination [710, 910] connects with clean routes', () => {
-  assert.deepEqual(destinations.terrace, [710, 910]);
+test('terrace navigation: owner reaches the pool loungers through the terrace door', () => {
   assert.ok(officeObjects.terrace);
   assert.equal(officeObjects.terrace.role, 'Relaksasi & kolam');
   assert.ok(officeObjects.terrace.description.includes('#388DA7'));
 
-  // Route between office and terrace exists and terminates at destination
-  const routeToTerrace = routeBetween('office', 'terrace');
-  assert.ok(routeToTerrace.length > 0);
-  assert.deepEqual(routeToTerrace.at(-1), destinations.terrace);
+  const nav = new NavGrid();
+  const route = nav.findPath(SPOTS['desk-owner'].pos, SPOTS['lounger-b'].pos);
+  assert.ok(route.length > 1);
+  assert.deepEqual(route.at(-1), SPOTS['lounger-b'].pos);
+  // Jalur keluar gedung harus melewati pintu teras di dinding selatan.
+  let previous = SPOTS['desk-owner'].pos;
+  let crossedAt = null;
+  for (const point of route) {
+    if (previous[1] < BUILDING.z1 && point[1] >= BUILDING.z1) crossedAt = previous[0] + (point[0] - previous[0]) * (BUILDING.z1 - previous[1]) / (point[1] - previous[1]);
+    previous = point;
+  }
+  assert.ok(crossedAt !== null && crossedAt > TERRACE_DOOR.x0 && crossedAt < TERRACE_DOOR.x1, `crossed wall at x=${crossedAt}`);
 
-  const routeFromTerrace = routeBetween('terrace', 'lounge');
-  assert.ok(routeFromTerrace.length > 0);
-  assert.deepEqual(routeFromTerrace.at(-1), destinations.lounge);
+  const back = nav.findPath(SPOTS['lounger-b'].pos, SPOTS['armchair-a'].pos);
+  assert.deepEqual(back.at(-1), SPOTS['armchair-a'].pos);
 });
 
 test('expansion rooms: metadata defines terrace, creative studio, and gaming room with budget notes', () => {

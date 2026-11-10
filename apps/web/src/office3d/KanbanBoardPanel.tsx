@@ -44,6 +44,8 @@ export function KanbanBoardPanel({ csrfToken, invoices }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(() => snapshot?.tasks[0]?.id ?? null);
   const [loading, setLoading] = useState(!snapshot);
   const [mutating, setMutating] = useState(false);
+  // Hermes CLI butuh ~15 detik per sinkron; selama itu snapshot lokal ditampilkan sebagai "menyinkronkan", bukan stale.
+  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
@@ -56,6 +58,7 @@ export function KanbanBoardPanel({ csrfToken, invoices }: Props) {
   const [linkInvoiceId, setLinkInvoiceId] = useState('');
 
   const fetchBoard = useCallback(async (targetBoard = board, signal?: AbortSignal) => {
+    setSyncing(true);
     try {
       const response = await fetch(`/api/kanban?board=${encodeURIComponent(targetBoard)}`, { signal });
       if (!response.ok) throw new Error(errorMessage(response));
@@ -78,6 +81,7 @@ export function KanbanBoardPanel({ csrfToken, invoices }: Props) {
       }
     } finally {
       setLoading(false);
+      setSyncing(false);
     }
   }, [board]);
 
@@ -114,8 +118,9 @@ export function KanbanBoardPanel({ csrfToken, invoices }: Props) {
     stale,
     isOffline: snapshot?.isOffline,
     mutating,
+    syncing,
     csrfToken
-  }), [snapshot, stale, mutating, csrfToken]);
+  }), [snapshot, stale, mutating, syncing, csrfToken]);
   const selected = snapshot?.tasks.find(task => task.id === selectedId) ?? null;
   const linksForSelected = snapshot?.links.filter(link => link.taskId === selectedId) ?? [];
 
@@ -196,9 +201,11 @@ export function KanbanBoardPanel({ csrfToken, invoices }: Props) {
     </div>
     <div className="kanban-status-bar">
       {snapshot && (
-        <p className={mutating ? 'kanban-sync mutating' : stale ? 'kanban-sync stale' : 'kanban-sync'} role="status">
+        <p className={mutating || syncing ? 'kanban-sync mutating' : stale ? 'kanban-sync stale' : 'kanban-sync'} role="status">
           {mutating
             ? 'Menyimpan perubahan...'
+            : syncing && (stale || snapshot.isOffline)
+            ? `Menyinkronkan dengan Hermes… · data terakhir ${new Date(snapshot.lastSyncAt).toLocaleString('id-ID')}`
             : snapshot.isOffline
             ? `Offline (snapshot lokal) · ${new Date(snapshot.lastSyncAt).toLocaleString('id-ID')}`
             : stale

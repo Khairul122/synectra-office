@@ -1,0 +1,234 @@
+/*
+ * HUD kantor 3D bergaya game life-sim (desain orisinal, terinspirasi tampilan game simulasi kehidupan PC):
+ * panel putih-biru berlapis, tombol bundar bergradasi, gelembung aksi, bilah kebutuhan, potret bercincin status.
+ * Tidak menyentuh tablet (.office-drawer / .tablet-screen).
+ */
+.office-app {
+  --life-ink: #12355b; --life-text: #2c4d70; --life-muted: #587390;
+  --life-panel: linear-gradient(180deg, #ffffff 0%, #eef6fd 100%);
+  --life-edge: 0 0 0 1px rgba(26, 78, 140, 0.16), 0 8px 22px rgba(18, 48, 90, 0.24);
+  --life-cyan: #1aa0d8; --life-cyan-deep: #0d78b5; --life-green: #39b85b; --life-amber: #f0b13a; --life-red: #e0565b;
+  --life-radius: 16px;
+  background: #a9d8ee;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+}
+.office-app .office-stage { background: #a9d8ee; }
+.office-app .office-canvas > canvas { outline: none; }
+.office-app .office-canvas > canvas:focus-visible { box-shadow: inset 0 0 0 3px var(--life-cyan); }
+
+/* ---------------- Panel dasar ---------------- */
+.office-app :is(.hud-lot, .hud-toolbar, .hud-camera, .hud-sim-panel, .hud-feed > li) {
+  border: 2px solid #ffffff; border-radius: var(--life-radius); background: var(--life-panel); box-shadow: var(--life-edge); color: var(--life-text);
+}
+.office-app :is(.hud-lot, .hud-toolbar, .hud-camera, .hud-household, .hud-sim-panel, .hud-feed, .open-tablet) { position: absolute; z-index: 12; }
+
+/* Tombol bundar bergradasi. */
+.office-app .hud-round {
+  display: grid; place-items: center; width: 42px; height: 42px; padding: 0; border: 2px solid #fff; border-radius: 50%;
+  background: linear-gradient(180deg, #ffffff, #d9ebf8); color: var(--life-cyan-deep); box-shadow: 0 2px 0 #9cc4e0, 0 4px 10px rgba(18, 48, 90, 0.18); cursor: pointer;
+  transition: transform .12s ease, background .12s ease;
+}
+.office-app .hud-round svg { width: 20px; height: 20px; stroke-width: 2; }
+.office-app .hud-round:hover:not(:disabled) { transform: translateY(-1px); background: linear-gradient(180deg, #ffffff, #c9e6fb); }
+.office-app .hud-round:active:not(:disabled) { transform: translateY(1px); box-shadow: 0 1px 0 #9cc4e0; }
+.office-app .hud-round.active { background: linear-gradient(180deg, #3cc0f0, var(--life-cyan-deep)); color: #fff; box-shadow: 0 2px 0 #0a5f90, 0 4px 10px rgba(13, 120, 181, 0.35); }
+.office-app .hud-round:disabled { opacity: .5; cursor: not-allowed; }
+.office-app .hud-round.mirror svg { transform: scaleX(-1); }
+.office-app :is(.hud-round, .hud-member, .sim-buttons button, .sim-interactions button, .sim-close, .open-tablet, .hud-feed button):focus-visible { outline: 3px solid #ffb627; outline-offset: 2px; }
+
+/* ---------------- Info lot (kiri atas) ---------------- */
+.office-app .hud-lot { top: 16px; left: 16px; display: grid; gap: 8px; min-width: 250px; max-width: 320px; padding: 12px 16px 12px; }
+.office-app .hud-lot-main { display: grid; grid-template-columns: 1fr auto; align-items: end; column-gap: 12px; }
+.office-app .hud-lot-name { grid-column: 1 / -1; display: inline-flex; align-items: center; gap: 7px; color: var(--life-cyan-deep); font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.office-app .hud-lot-name .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--life-green); box-shadow: 0 0 0 3px rgba(57, 184, 91, .22); }
+.office-app .hud-clock { color: var(--life-ink); font-size: 30px; font-weight: 800; line-height: 1; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.office-app .hud-clock small { margin-left: 4px; color: var(--life-muted); font-size: 12px; font-weight: 700; letter-spacing: 0; }
+.office-app .hud-date { justify-self: end; color: var(--life-muted); font-size: 12px; font-weight: 600; text-transform: capitalize; }
+.office-app .hud-lot-status { display: flex; flex-wrap: wrap; gap: 6px; }
+.office-app .hud-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 26px; padding: 2px 10px; border-radius: 999px; background: #e3f1fb; color: var(--life-ink); font-size: 12px; font-weight: 700; }
+.office-app .hud-chip svg { width: 15px; height: 15px; }
+.office-app .hud-chip i { width: 9px; height: 9px; border-radius: 50%; background: #9db3c7; }
+.office-app .hud-chip.state-working i { background: var(--life-green); box-shadow: 0 0 0 3px rgba(57, 184, 91, .25); }
+.office-app .hud-chip.state-available i { background: var(--life-cyan); }
+.office-app .hud-chip.state-away i { background: var(--life-amber); }
+.office-app .hud-chip.state-stale i, .office-app .hud-chip.state-offline i { background: var(--life-red); }
+.office-app .hud-lot-activity { margin: 0; color: var(--life-text); font-size: 12.5px; line-height: 1.4; }
+
+/* ---------------- Tablet & toolbar (kanan atas) ---------------- */
+.office-app .open-tablet {
+  top: 16px; right: 16px; display: inline-flex; align-items: center; gap: 8px; min-height: 46px; padding: 0 20px; border: 2px solid #fff; border-radius: 999px;
+  background: linear-gradient(180deg, #45c66a, #2d9a4d); color: #fff; box-shadow: 0 3px 0 #1f7a39, 0 8px 18px rgba(31, 122, 57, .35); font-size: 14px; font-weight: 800; letter-spacing: .01em; cursor: pointer;
+}
+.office-app .open-tablet:hover { background: linear-gradient(180deg, #52d477, #2f9f50); }
+.office-app .open-tablet svg { width: 19px; height: 19px; }
+.office-app .hud-toolbar { top: 76px; right: 16px; display: flex; gap: 6px; padding: 6px; border-radius: 999px; }
+
+/* ---------------- Kamera (kanan tengah) ---------------- */
+.office-app .hud-camera { top: 50%; right: 16px; transform: translateY(-50%); display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 6px; border-radius: 28px; }
+.office-app .hud-divider { width: 24px; height: 2px; border-radius: 2px; background: #cfe2f1; }
+.office-app .hud-jump select { width: 42px; height: 42px; padding: 0; border: 2px solid #fff; border-radius: 50%; background: linear-gradient(180deg, #fff, #d9ebf8) center/18px no-repeat; color: transparent; box-shadow: 0 2px 0 #9cc4e0; cursor: pointer; appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230d78b5' stroke-width='2.2' stroke-linecap='round'%3E%3Cpath d='M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z'/%3E%3Ccircle cx='12' cy='10' r='2.5'/%3E%3C/svg%3E"), linear-gradient(180deg, #fff, #d9ebf8); }
+.office-app .hud-jump select option { color: var(--life-ink); }
+.office-app .hud-jump select:focus-visible { outline: 3px solid #ffb627; outline-offset: 2px; }
+
+/* ---------------- Penghuni (kiri bawah) ---------------- */
+.office-app .hud-household { left: 16px; bottom: 16px; display: flex; gap: 10px; padding: 8px 10px; border-radius: 999px; background: rgba(255, 255, 255, .55); box-shadow: 0 6px 18px rgba(18, 48, 90, .18); backdrop-filter: blur(6px); }
+.office-app .hud-member { position: relative; display: grid; justify-items: center; gap: 2px; width: 62px; padding: 0; border: 0; background: none; color: var(--life-ink); cursor: pointer; }
+.office-app .hud-member .portrait { width: 52px; height: 52px; border: 3px solid #fff; box-shadow: 0 0 0 2px #9fc3dd, 0 4px 10px rgba(18, 48, 90, .25); transition: transform .12s ease; }
+.office-app .hud-member:hover .portrait { transform: translateY(-2px); }
+.office-app .hud-member.is-real .portrait { box-shadow: 0 0 0 3px var(--life-green), 0 4px 10px rgba(18, 48, 90, .25); }
+.office-app .hud-member.active .portrait { box-shadow: 0 0 0 3px var(--life-cyan), 0 0 0 7px rgba(26, 160, 216, .25), 0 4px 10px rgba(18, 48, 90, .25); transform: translateY(-3px); }
+.office-app .hud-member-name { max-width: 64px; overflow: hidden; color: var(--life-ink); font-size: 11px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; text-shadow: 0 1px 0 #fff; }
+
+/* Potret 3D (atau inisial bila belum siap). */
+.office-app .portrait[data-photo], .office-drawer .portrait[data-photo] { background-size: cover; background-position: center 30%; background-color: #dff3fb; }
+.office-app .portrait[data-photo]::after { content: none !important; }
+.office-app .portrait-large { width: 64px; height: 64px; }
+/* Fallback inisial berwarna sampai potret 3D selesai dirender (juga dipakai header tablet). */
+.portrait:not([data-photo]) { display: inline-grid; place-items: center; background-image: none; color: #fff; font-weight: 800; font-size: 11px; }
+.portrait-0:not([data-photo]) { background-color: #33507f; } .portrait-0:not([data-photo])::after { content: 'H'; }
+.portrait-1:not([data-photo]) { background-color: #e3874f; } .portrait-1:not([data-photo])::after { content: 'A'; }
+.portrait-2:not([data-photo]) { background-color: #4f9e7c; } .portrait-2:not([data-photo])::after { content: 'K'; }
+.portrait-3:not([data-photo]) { background-color: #388da7; } .portrait-3:not([data-photo])::after { content: 'P'; }
+
+/* ---------------- Panel karakter ---------------- */
+.office-app .hud-sim-panel { left: 16px; bottom: 104px; display: grid; gap: 10px; width: min(340px, calc(100vw - 32px)); max-height: calc(100% - 210px); overflow: auto; padding: 14px; }
+.office-app .sim-head { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; }
+.office-app .sim-head .portrait { width: 64px; height: 64px; border: 3px solid #fff; box-shadow: 0 0 0 2px #9fc3dd, 0 4px 10px rgba(18, 48, 90, .2); }
+.office-app .sim-title { display: grid; gap: 2px; min-width: 0; }
+.office-app .sim-title h2 { margin: 0; color: var(--life-ink); font-size: 19px; font-weight: 800; line-height: 1.15; }
+.office-app .sim-title > span:not(.sim-mood) { color: var(--life-muted); font-size: 12px; font-weight: 600; }
+.office-app .sim-mood { justify-self: start; display: inline-flex; align-items: center; gap: 6px; margin-top: 2px; padding: 2px 10px 2px 6px; border-radius: 999px; background: #e9f7ee; color: #1f6b3a; font-size: 12px; font-weight: 800; }
+.office-app .sim-mood i { width: 12px; height: 12px; border-radius: 50%; background: var(--life-green); box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .15); }
+.office-app .sim-mood.mood-fokus { background: #e3f1fb; color: #0d5f91; } .office-app .sim-mood.mood-fokus i { background: var(--life-cyan); }
+.office-app .sim-mood.mood-santai { background: #eef3f8; color: #3f5a76; } .office-app .sim-mood.mood-santai i { background: #8fb3d1; }
+.office-app .sim-mood:is(.mood-lelah, .mood-bosan, .mood-kesepian) { background: #fdf3df; color: #7a5212; } .office-app .sim-mood:is(.mood-lelah, .mood-bosan, .mood-kesepian) i { background: var(--life-amber); }
+.office-app .sim-mood.mood-kesal { background: #fde8ea; color: #9b2c3c; } .office-app .sim-mood.mood-kesal i { background: var(--life-red); }
+.office-app .sim-close { align-self: start; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; background: #e3eef8; color: var(--life-ink); font-size: 20px; line-height: 1; cursor: pointer; }
+.office-app .sim-close:hover { background: #d2e5f5; }
+.office-app .sim-action { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 10px; padding: 10px; border-radius: 12px; background: #f1f7fc; border: 1px solid #d9e8f4; }
+.office-app .sim-action.is-real { background: #ebf8ef; border-color: #bfe6cb; }
+.office-app .sim-action-icon { display: grid; place-items: center; width: 40px; height: 40px; border: 2px solid #fff; border-radius: 12px; background: linear-gradient(180deg, #4fc4f2, var(--life-cyan-deep)); color: #fff; box-shadow: 0 2px 0 #0a5f90; }
+.office-app .sim-action.is-real .sim-action-icon { background: linear-gradient(180deg, #54d07a, #2b9a4c); box-shadow: 0 2px 0 #1f7a39; }
+.office-app .sim-action-icon svg { width: 22px; height: 22px; }
+.office-app .sim-action strong { display: block; color: var(--life-ink); font-size: 13.5px; line-height: 1.35; }
+.office-app .sim-badge { display: inline-block; margin-top: 3px; padding: 1px 8px; border-radius: 999px; background: #dfe9f2; color: #46627e; font-size: 11px; font-weight: 800; }
+.office-app .sim-action.is-real .sim-badge { background: #c9eed5; color: #1f6b3a; }
+.office-app .sim-queue { display: flex; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.office-app .sim-queue li { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 4px 10px 4px 6px; border-radius: 999px; background: #eef4fa; color: var(--life-text); font-size: 11.5px; font-weight: 600; }
+.office-app .sim-queue li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.office-app .sim-queue svg { flex: none; width: 16px; height: 16px; color: var(--life-cyan-deep); }
+.office-app .sim-needs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; }
+.office-app .sim-need { display: grid; gap: 3px; }
+.office-app .sim-need span { color: var(--life-muted); font-size: 11.5px; font-weight: 700; }
+.office-app .sim-need meter { width: 100%; height: 12px; border-radius: 999px; background: #dde8f1; box-shadow: inset 0 1px 2px rgba(0, 0, 0, .12); }
+.office-app .sim-need meter::-webkit-meter-bar { border: 0; border-radius: 999px; background: #dde8f1; height: 12px; }
+.office-app .sim-need meter::-webkit-meter-optimum-value { border-radius: 999px; background: linear-gradient(180deg, #6fdc8c, #2fae55); }
+.office-app .sim-need meter::-webkit-meter-suboptimum-value { border-radius: 999px; background: linear-gradient(180deg, #ffd36b, #eaa21f); }
+.office-app .sim-need meter::-webkit-meter-even-less-good-value { border-radius: 999px; background: linear-gradient(180deg, #ff8a8f, #d9434b); }
+.office-app .sim-need meter:-moz-meter-optimum::-moz-meter-bar { border-radius: 999px; background: #2fae55; }
+.office-app .sim-need meter:-moz-meter-sub-optimum::-moz-meter-bar { border-radius: 999px; background: #eaa21f; }
+.office-app .sim-need meter:-moz-meter-sub-sub-optimum::-moz-meter-bar { border-radius: 999px; background: #d9434b; }
+.office-app .sim-real { margin: 0; color: var(--life-muted); font-size: 12px; line-height: 1.4; }
+.office-app .sim-interactions { display: flex; flex-wrap: wrap; gap: 6px; }
+.office-app .sim-interactions button { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; border: 2px solid #fff; border-radius: 999px; background: linear-gradient(180deg, #fff, #e2eff9); color: var(--life-ink); box-shadow: 0 2px 0 #b5d2e7; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+.office-app .sim-interactions button svg { width: 16px; height: 16px; color: var(--life-cyan-deep); }
+.office-app .sim-interactions button[aria-pressed="true"] { background: linear-gradient(180deg, #3cc0f0, var(--life-cyan-deep)); color: #fff; box-shadow: 0 2px 0 #0a5f90; }
+.office-app .sim-interactions button[aria-pressed="true"] svg { color: #fff; }
+.office-app .sim-interactions button:disabled { opacity: .5; cursor: not-allowed; }
+.office-app .sim-buttons { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.office-app .sim-buttons button { min-height: 40px; padding: 0 14px; border: 2px solid #fff; border-radius: 999px; background: linear-gradient(180deg, #fff, #e2eff9); color: var(--life-ink); box-shadow: 0 2px 0 #b5d2e7; font-size: 13px; font-weight: 800; cursor: pointer; }
+.office-app .sim-buttons .sim-primary { background: linear-gradient(180deg, #45c66a, #2d9a4d); color: #fff; box-shadow: 0 2px 0 #1f7a39; }
+.office-app .sim-buttons .is-on { background: linear-gradient(180deg, #3cc0f0, var(--life-cyan-deep)); color: #fff; box-shadow: 0 2px 0 #0a5f90; }
+
+/* ---------------- Notifikasi (kanan bawah) ---------------- */
+.office-app .hud-feed { right: 16px; bottom: 76px; display: grid; gap: 8px; width: min(320px, calc(100vw - 32px)); margin: 0; padding: 0; list-style: none; }
+.office-app .hud-feed > li { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; padding: 10px 10px 10px 12px; border-left: 6px solid var(--life-green); animation: life-slide .35s ease-out; }
+.office-app .hud-feed > li.feed-fail { border-left-color: var(--life-red); }
+.office-app .hud-feed .portrait { width: 38px; height: 38px; border: 2px solid #fff; box-shadow: 0 0 0 1px #9fc3dd; }
+.office-app .hud-feed strong { display: block; color: var(--life-ink); font-size: 13px; }
+.office-app .hud-feed span { color: var(--life-text); font-size: 12px; line-height: 1.35; }
+.office-app .hud-feed button { width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50%; background: #e3eef8; color: var(--life-ink); font-size: 16px; cursor: pointer; }
+@keyframes life-slide { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
+
+/* ---------------- Menu (kanan bawah) ---------------- */
+.office-app .office-footer-menu { left: auto; right: 16px; bottom: 16px; }
+.office-app .office-footer-menu > summary { min-height: 46px; padding: 0 18px; border: 2px solid #fff; border-radius: 999px; background: var(--life-panel); color: var(--life-ink); box-shadow: var(--life-edge); font-weight: 800; }
+.office-app .office-footer-menu > summary:hover { background: linear-gradient(180deg, #fff, #dcedfa); }
+.office-app .office-footer-content { left: auto; right: 0; border: 2px solid #fff; border-radius: var(--life-radius); background: var(--life-panel); color: var(--life-text); box-shadow: var(--life-edge); }
+.office-app .office-footer-content .nav-item { border: 2px solid #fff; border-radius: 12px; background: linear-gradient(180deg, #fff, #e6f1fa); color: var(--life-ink); box-shadow: 0 2px 0 #b5d2e7; font-weight: 700; }
+.office-app .office-footer-content .nav-item.active { background: linear-gradient(180deg, #3cc0f0, var(--life-cyan-deep)); color: #fff; box-shadow: 0 2px 0 #0a5f90; }
+.office-app .office-footer-content :is(.footer-status, .settings-popover, .object-picker select) { border: 1px solid #d3e4f1; border-radius: 12px; background: #fff; color: var(--life-text); }
+.office-app .office-footer-content .footer-status { padding: 10px 12px; }
+.office-app .office-footer-content .performance-settings summary { color: var(--life-ink); font-weight: 700; }
+
+/* ---------------- Label di dunia 3D ---------------- */
+.office-app .object-label {
+  gap: 6px; min-height: 30px; padding: 3px 10px 3px 3px; border: 2px solid #fff; border-radius: 999px; background: rgba(255, 255, 255, .92); color: var(--life-ink);
+  box-shadow: 0 0 0 1px rgba(26, 78, 140, .18), 0 4px 10px rgba(18, 48, 90, .25); font-size: 11.5px; font-weight: 800; backdrop-filter: none;
+}
+.office-app .object-label:after { display: none; }
+.office-app .object-label:hover, .office-app .object-label.selected { border-color: #fff; background: #ffffff; color: var(--life-ink); box-shadow: 0 0 0 3px var(--life-cyan), 0 6px 14px rgba(18, 48, 90, .3); }
+.office-app .object-label .portrait { width: 24px; height: 24px; border: 2px solid #fff; box-shadow: 0 0 0 1px #9fc3dd; }
+.office-app .object-label .label-dot { width: 8px; height: 8px; margin: 0; border-radius: 50%; background: #8fb3d1; }
+.office-app .object-label.is-working .label-dot { background: var(--life-green); box-shadow: 0 0 0 3px rgba(57, 184, 91, .3); animation: life-pulse 1.6s ease-in-out infinite; }
+.office-app .prop-label { padding: 4px 10px 4px 6px; background: rgba(255, 255, 255, .78); color: var(--life-text); font-size: 11px; opacity: .85; }
+.office-app .prop-label svg { width: 16px; height: 16px; color: var(--life-cyan-deep); }
+.office-app .prop-label:hover, .office-app .prop-label.selected { opacity: 1; }
+/* Gelembung aksi (selalu tampil ringkas sebagai ikon; teks penuh saat disorot/terpilih/kerja nyata). */
+.office-app .object-label .label-bubble {
+  display: inline-flex; align-items: center; gap: 6px; bottom: calc(100% + 9px); max-width: min(240px, 60vw); padding: 5px 10px; border: 2px solid #fff; border-radius: 14px;
+  background: #ffffff; color: var(--life-ink); box-shadow: 0 0 0 1px rgba(26, 78, 140, .16), 0 4px 10px rgba(18, 48, 90, .22); font-size: 11.5px; font-weight: 700; line-height: 1.3; white-space: normal; text-align: left;
+}
+.office-app .object-label .label-bubble::after { bottom: -6px; left: calc(50% - 5px); width: 9px; height: 9px; background: #fff; border: 0; box-shadow: 1px 1px 0 rgba(26, 78, 140, .16); }
+.office-app .object-label .label-bubble svg { flex: none; width: 16px; height: 16px; color: var(--life-cyan-deep); }
+.office-app .object-label .label-bubble > span { display: none; }
+.office-app .object-label .label-bubble { padding: 5px; border-radius: 50%; }
+.office-app .person-label:is(:hover, :focus-visible, .selected, .is-working) .label-bubble { padding: 5px 10px; border-radius: 14px; }
+.office-app .person-label:is(:hover, :focus-visible, .selected, .is-working) .label-bubble > span { display: inline; }
+.office-app .person-label.is-working .label-bubble { background: #effaf2; }
+.office-app .person-label.is-working .label-bubble svg { color: #2b9a4c; }
+@keyframes life-pulse { 50% { box-shadow: 0 0 0 6px rgba(57, 184, 91, 0); } }
+
+/* ---------------- Pesan & dialog ---------------- */
+.office-app .scene-message { border: 2px solid #fff; border-radius: var(--life-radius); background: var(--life-panel); color: var(--life-text); box-shadow: var(--life-edge); }
+.office-app .scene-message .loader { border-color: #cfe2f1; border-top-color: var(--life-cyan); }
+:is(.help-dialog, .health-dialog, .avatar-dialog, .expansion-dialog) { border: 3px solid #fff; border-radius: 20px; background: linear-gradient(180deg, #ffffff, #eef6fd); color: #2c4d70; box-shadow: 0 0 0 1px rgba(26, 78, 140, .2), 0 18px 46px rgba(18, 48, 90, .35); }
+:is(.help-dialog, .health-dialog, .avatar-dialog, .expansion-dialog)::backdrop { background: rgba(14, 40, 72, .35); backdrop-filter: blur(2px); }
+:is(.help-dialog, .health-dialog, .avatar-dialog, .expansion-dialog) h2 { color: #12355b; font-family: inherit; font-weight: 800; }
+:is(.help-dialog, .health-dialog, .avatar-dialog, .expansion-dialog) .icon-button { border: 2px solid #fff; border-radius: 50%; background: linear-gradient(180deg, #fff, #d9ebf8); color: #0d78b5; box-shadow: 0 2px 0 #9cc4e0; }
+:is(.health-dialog, .avatar-dialog, .expansion-dialog) .primary-button { border: 2px solid #fff; border-radius: 999px; background: linear-gradient(180deg, #45c66a, #2d9a4d); color: #fff; box-shadow: 0 2px 0 #1f7a39; font-weight: 800; }
+:is(.health-dialog, .avatar-dialog, .expansion-dialog) .secondary-button { border: 2px solid #fff; border-radius: 999px; background: linear-gradient(180deg, #fff, #e2eff9); color: #12355b; box-shadow: 0 2px 0 #b5d2e7; font-weight: 700; }
+.avatar-dialog .chip-button { border: 2px solid #fff; border-radius: 999px; background: linear-gradient(180deg, #fff, #e6f1fa); color: #12355b; box-shadow: 0 2px 0 #b5d2e7; font-weight: 700; }
+.avatar-dialog .chip-button.active { background: linear-gradient(180deg, #3cc0f0, #0d78b5); color: #fff; box-shadow: 0 2px 0 #0a5f90; }
+.avatar-dialog .color-picker-wrap { border: 1px solid #d3e4f1; border-radius: 12px; background: #fff; }
+:is(.health-card, .expansion-card) { border: 2px solid #fff; border-radius: 14px; background: #f3f9fe; box-shadow: 0 0 0 1px #d3e4f1; }
+.help-dialog dt { color: #12355b; font-weight: 800; }
+
+/* ---------------- Responsif ---------------- */
+@media (max-width: 900px) {
+  .office-app .hud-camera { top: auto; bottom: 120px; transform: none; }
+  .office-app .hud-feed { bottom: 132px; }
+}
+@media (max-width: 760px) {
+  .office-app .hud-lot { top: 10px; left: 10px; min-width: 0; max-width: calc(100vw - 170px); padding: 9px 12px; gap: 6px; }
+  .office-app .hud-clock { font-size: 22px; }
+  .office-app .hud-lot-activity, .office-app .hud-date { display: none; }
+  .office-app .open-tablet { top: 10px; right: 10px; min-height: 42px; padding: 0 14px; font-size: 13px; }
+  .office-app .hud-toolbar { top: 62px; right: 10px; flex-direction: column; border-radius: 26px; }
+  .office-app .hud-toolbar .hud-round, .office-app .hud-camera .hud-round, .office-app .hud-jump select { width: 38px; height: 38px; }
+  .office-app .hud-camera { right: 10px; bottom: 80px; flex-direction: row; flex-wrap: wrap; justify-content: center; max-width: 190px; border-radius: 22px; }
+  .office-app .hud-camera .hud-divider { display: none; }
+  .office-app .hud-household { left: 10px; bottom: 10px; gap: 4px; padding: 6px; }
+  .office-app .hud-member { width: 50px; }
+  .office-app .hud-member .portrait { width: 42px; height: 42px; }
+  .office-app .hud-member-name { display: none; }
+  .office-app .hud-sim-panel { left: 10px; right: 10px; bottom: 74px; width: auto; max-height: 55dvh; }
+  .office-app .hud-feed { left: 10px; right: 10px; top: 112px; bottom: auto; width: auto; }
+  .office-app .office-footer-menu { right: 10px; bottom: 10px; }
+  .office-app .office-footer-menu > summary span { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .office-app .hud-feed > li, .office-app .object-label.is-working .label-dot { animation: none !important; }
+  .office-app :is(.hud-round, .hud-member .portrait) { transition: none !important; }
+}

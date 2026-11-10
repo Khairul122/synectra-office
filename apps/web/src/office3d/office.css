@@ -575,22 +575,18 @@ button,summary {
 }
 
 .portrait-0 {
-  background-image:url('/assets/office2d/hermes.png');
   --portrait-x:4.5%;
 }
 
 .portrait-1 {
-  background-image:url('/assets/office2d/admin.png');
   --portrait-x:4%;
 }
 
 .portrait-2 {
-  background-image:url('/assets/office2d/communication.png');
   --portrait-x:3%;
 }
 
 .portrait-3 {
-  background-image:url('/assets/office2d/owner.png');
   --portrait-x:4.5%;
 }
 

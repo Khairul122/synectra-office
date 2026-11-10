@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import type { ServicesHealthResponse } from '@synectra/contracts';
-import type { OfficeSceneManager, Pose, StaffId } from './scene-manager-2d';
+import { officeBusinessEventSchema, officeStatusEventSchema, officeStaffSnapshotSchema, type OfficeStaffSnapshot, type ServicesHealthResponse } from '@synectra/contracts';
+import type { ActorId, ActorUiState, OfficeSceneManager, Pose, StaffId } from './scene-manager-3d';
+import { LifeIcon, Portrait, SimPanel } from './LifeHud';
 import type { Destination } from './office-navigation';
 import { officeObjects, team, expansionRooms, type OfficeObjectId } from './office-data';
 import { tabletApps } from './tablet-apps';
 import type { OfficeStatus, OfficeStatusEvent, OfficeStatusSnapshot, PerformanceMetrics, WorkState, AvatarCustomization, AtmosphereCycle, AudioPreference, HairStyle, OutfitStyle, Accessory } from './types';
 import { StatusStore } from './status-store';
+import { eventStatus } from './event-status';
 import { getStoredAvatar, setStoredAvatar, getStoredAtmosphere, setStoredAtmosphere, getStoredAudioPreference, setStoredAudioPreference, DEFAULT_AVATAR } from './avatar-storage';
 import { OfficeAudioEngine } from './office-audio';
 import './office.css';
 import './redesign.css';
 import './tablet-ui.css';
+import './life-ui.css';
 
 type IconName = 'home' | 'note' | 'board' | 'calendar' | 'plus' | 'minus' | 'reset' | 'sun' | 'moon' | 'sunset' | 'pause' | 'play' | 'expand' | 'close' | 'focus' | 'coffee' | 'sofa' | 'help' | 'settings' | 'arrow' | 'volume' | 'mute' | 'user' | 'waves' | 'grid' | 'signature' | 'payment';
 function Icon({ name }: { name: IconName }) {
@@ -96,13 +99,21 @@ export function OfficeSpikeView({ serverHealth, whatsappStatus, businessActivity
   const [generation, setGeneration] = useState(0);
   const [roomFilter, setRoomFilter] = useState('all');
   const [staffPoses, setStaffPoses] = useState<Record<StaffId, Pose>>({ hermes: 'sit', admin: 'sit', communication: 'sit' });
+  const [staffEvents, setStaffEvents] = useState<Partial<Record<StaffId, string>>>({});
+  const [staffSnapshot, setStaffSnapshot] = useState<OfficeStaffSnapshot | null>(null);
+  const [actorStates, setActorStates] = useState<Record<ActorId, ActorUiState> | null>(null);
+  const [portraits, setPortraits] = useState<Partial<Record<ActorId, string>>>({});
+  const [focusedActor, setFocusedActor] = useState<ActorId | null>(null);
+  const [following, setFollowing] = useState(false);
+  const [feed, setFeed] = useState<Array<{ id: string; text: string; tone: 'success' | 'fail'; who: StaffId; at: number }>>([]);
+  const worldSelect = useRef<(id: OfficeObjectId) => void>(() => undefined);
+  const staffEventTimers = useRef<Partial<Record<StaffId, number>>>({});
   const [now, setNow] = useState(() => new Date());
   const statusStoreRef = useRef(new StatusStore());
   const quiet = reducedMotion || preferences.quiet;
   const stale = now.getTime() - heartbeatAt >= 120000;
   const displayedWorkState: WorkState = serverHealth === 'Tidak tersedia' ? 'offline' : stale ? 'stale' : workState;
   const workStateLabel: Record<WorkState, string> = { working: 'Bekerja', available: 'Tersedia', away: 'Jeda', stale: 'Tidak diperbarui', offline: 'Offline' };
-  const poseLabel: Record<Pose, string> = { idle: 'Diam', walk: 'Berjalan di tempat', sit: 'Mengetik', drink: 'Minum', rest: 'Istirahat' };
   const visibleActivity = serverHealth === 'Tidak tersedia' ? 'Server tidak tersedia' : businessActivity ?? activity ?? decorativeActivity;
   const whatsappLabel = whatsappStatus === 'connected' ? 'terhubung' : whatsappStatus === 'checking' ? 'sedang diperiksa' : whatsappStatus === 'unavailable' || whatsappStatus === 'error' ? 'status tidak tersedia' : whatsappStatus === 'connecting' || whatsappStatus === 'reconnecting' ? 'menghubungkan' : whatsappStatus === 'pairing' ? 'menunggu pemindaian' : 'belum terhubung';
 
@@ -145,10 +156,12 @@ export function OfficeSpikeView({ serverHealth, whatsappStatus, businessActivity
     let manager: OfficeSceneManager | undefined;
     setError(null);
     setLoaded(false);
-    void import('./scene-manager-2d').then(async ({ OfficeSceneManager }) => {
+    void import('./scene-manager-3d').then(async ({ OfficeSceneManager }) => {
       if (cancelled) return;
       manager = new OfficeSceneManager(container, {
-        onSelect: select, onMetrics: setMetrics,
+        onSelect: id => worldSelect.current(id), onMetrics: setMetrics,
+        onStaffState: setActorStates,
+        onPortraits: next => setPortraits(current => ({ ...current, ...next })),
         onActivity: (message, isMoving) => { setDecorativeActivity(message); setMoving(isMoving); },
         onStatus: (status: OfficeStatus) => setDecorativeActivity(status.activity),
         onError: setError,
@@ -175,6 +188,7 @@ export function OfficeSpikeView({ serverHealth, whatsappStatus, businessActivity
     let reconnectTimer: number | undefined;
     let closed = false;
     let latestSequence = -1;
+    let staffRevision = -1;
     const applySnapshotStatus = (snapshots: OfficeStatusSnapshot[]) => {
       const latest = snapshots.reduce<OfficeStatusSnapshot | null>((best, item) => !best || item.sequence > best.sequence ? item : best, null);
       if (!latest || latest.sequence < latestSequence) return;
@@ -189,20 +203,58 @@ export function OfficeSpikeView({ serverHealth, whatsappStatus, businessActivity
     }).catch(() => undefined);
     const apply = (event: MessageEvent<string>) => {
       try {
-        const value = JSON.parse(event.data) as OfficeStatusEvent;
+        const raw: unknown = JSON.parse(event.data);
+        const business = officeBusinessEventSchema.safeParse(raw);
+        const ordinary = officeStatusEventSchema.safeParse(raw);
+        if (!business.success && !ordinary.success) return;
+        const record = business.success ? business.data : ordinary.success ? ordinary.data : null;
+        if (!record) return;
+        const status = eventStatus(record);
+        const value: OfficeStatusEvent = { ownerId: record.ownerId, eventId: record.eventId, sequence: record.sequence, occurredAt: record.occurredAt, status };
         if (!statusStoreRef.current.applyEvent(value)) return;
         latestSequence = Math.max(latestSequence, value.sequence);
-        setWorkState(value.status.workState);
-        setHeartbeatAt(value.status.heartbeatAt);
-        setActivity(value.status.activity);
+        setWorkState(status.workState);
+        setHeartbeatAt(status.heartbeatAt);
+        setActivity(status.activity);
+        if (business.success) {
+          const id: StaffId | null = business.data.type === 'pdf_generated' ? 'admin' : business.data.type === 'delivery_sent' || business.data.type === 'delivery_failed' || business.data.type === 'delivery_receipt' ? 'communication' : business.data.type === 'app_job_completed' ? 'hermes' : null;
+          if (id) {
+            const outcome: 'success' | 'fail' = business.data.type === 'delivery_failed' ? 'fail' : 'success';
+            managerRef.current?.reactToEvent(id, outcome);
+            setFeed(current => [{ id: record.eventId, text: status.activity, tone: outcome, who: id, at: Date.now() }, ...current].slice(0, 4));
+            setStaffEvents(current => ({ ...current, [id]: status.activity }));
+            clearTimeout(staffEventTimers.current[id]);
+            staffEventTimers.current[id] = window.setTimeout(() => setStaffEvents(current => ({ ...current, [id]: undefined })), 8000);
+          }
+        }
       } catch { /* Ignore malformed stream records. */ }
     };
     const connect = () => {
       if (closed) return;
       source = new EventSource('/api/office/events');
-      source.onopen = () => { void fetchSnapshot(); };
+      source.onopen = () => { staffRevision = -1; void fetchSnapshot(); };
       source.onmessage = apply;
+      source.addEventListener('staff', (event: MessageEvent<string>) => {
+        try {
+          const parsed = officeStaffSnapshotSchema.safeParse(JSON.parse(event.data));
+          if (!parsed.success || parsed.data.revision < staffRevision) return;
+          staffRevision = parsed.data.revision;
+          setStaffSnapshot(parsed.data);
+          setStaffPoses(current => {
+            const next = { ...current };
+            for (const id of ['hermes', 'admin', 'communication'] as StaffId[]) if (parsed.data.staff[id].active) next[id] = 'sit';
+            return next;
+          });
+        } catch { /* Ignore malformed activity records. */ }
+      });
+      source.addEventListener('heartbeat', (event: MessageEvent<string>) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (typeof data.heartbeatAt === 'number') setHeartbeatAt(data.heartbeatAt);
+        } catch { /* Ignore malformed heartbeat. */ }
+      });
       source.onerror = () => {
+        setStaffSnapshot(null);
         source?.close();
         if (reconnectTimer) window.clearTimeout(reconnectTimer);
         void fetchSnapshot().finally(() => {
@@ -221,6 +273,7 @@ export function OfficeSpikeView({ serverHealth, whatsappStatus, businessActivity
       source?.close();
       document.removeEventListener('visibilitychange', onVisible);
       if (reconnectTimer) window.clearTimeout(reconnectTimer);
+      Object.values(staffEventTimers.current).forEach(clearTimeout);
     };
   }, []);
 
@@ -232,6 +285,10 @@ export function OfficeSpikeView({ serverHealth, whatsappStatus, businessActivity
     return () => { query.removeEventListener('change', change); clearInterval(interval); };
   }, []);
   useEffect(() => { managerRef.current?.setQuiet(quiet); }, [quiet, loaded, generation]);
+  useEffect(() => {
+    for (const id of ['hermes', 'admin', 'communication'] as StaffId[]) { const staff = staffSnapshot?.staff[id]; managerRef.current?.setStaffActivity(id, staff?.active ? staff.activity : null); }
+  }, [staffSnapshot, loaded, generation]);
+  useEffect(() => { managerRef.current?.setWorkState(displayedWorkState); }, [displayedWorkState, loaded, generation]);
   useEffect(() => { managerRef.current?.setQuality(preferences.economy); }, [preferences.economy, loaded, generation]);
   useEffect(() => { managerRef.current?.setDaylight(preferences.daylight); }, [preferences.daylight, loaded, generation]);
   useEffect(() => {
@@ -260,6 +317,11 @@ export function OfficeSpikeView({ serverHealth, whatsappStatus, businessActivity
   useEffect(() => {
     for (const [id, pose] of Object.entries(staffPoses) as [StaffId, Pose][]) managerRef.current?.setStaffPose(id, pose);
   }, [staffPoses, loaded, generation]);
+  useEffect(() => {
+    if (!feed.length) return;
+    const timer = window.setTimeout(() => setFeed(current => current.filter(item => Date.now() - item.at < 12000)), 12500);
+    return () => clearTimeout(timer);
+  }, [feed]);
   useEffect(() => {
     try { localStorage.setItem('synectra.office.visuals', JSON.stringify(preferences)); } catch { /* Storage may be unavailable in private browser sessions. */ }
   }, [preferences]);
@@ -349,22 +411,40 @@ export function OfficeSpikeView({ serverHealth, whatsappStatus, businessActivity
   const activeApp = tabletApps.find(app => app.id === selected);
   const detail = selected === 'home' ? { name: 'Layar utama', role: 'Synectra Office', description: '' } : selected === 'signature' ? { name: 'Tanda tangan', role: 'Dokumen & PDF', description: 'Buat dan simpan tanda tangan untuk nota PDF.' } : selected === 'dashboard' ? { name: 'Dashboard', role: 'Keuangan', description: 'Pantau tagihan dan pembayaran klien.' } : selected === 'payments' ? { name: 'Pembayaran', role: 'Keuangan', description: 'Kelola tagihan, DP, termin, dan pelunasan.' } : selected ? officeObjects[selected] : null;
   const memberIndex = team.findIndex(member => member.id === selected);
+  const focusActor = (id: ActorId | null) => {
+    setFocusedActor(id); managerRef.current?.select(id ?? undefined);
+    if (!id) { setFollowing(false); managerRef.current?.follow(null); } else managerRef.current?.focus(id);
+  };
+  // Klik karakter membuka panel karakter (seperti game life-sim); klik objek langsung membuka tablet.
+  worldSelect.current = (id: OfficeObjectId) => { if (team.some(member => member.id === id)) focusActor(id as ActorId); else select(id); };
 
   return <main className="office-app">
     <div className={`office-workspace${selected ? ' has-drawer' : ''}`}>
       <section className="office-stage" aria-label="Kantor interaktif">
-        <div className="scene-intro"><div className="eyebrow"><span className="status-dot" /> Kantor Synectra</div><h1>Selamat datang di <em>kantor Anda.</em></h1><p>Pilih ruangan atau anggota tim untuk mulai bekerja.</p></div>
-        <div className="scene-time"><span>{new Intl.DateTimeFormat('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit', hour12: false }).format(now).replace('.', ':')} <small>WIB</small></span><span>{new Intl.DateTimeFormat('id-ID', { timeZone: 'Asia/Jakarta', weekday: 'long', day: 'numeric', month: 'short' }).format(now)}</span></div>
-
+        <header className="hud-lot" aria-label="Info kantor">
+          <div className="hud-lot-main">
+            <span className="hud-lot-name"><span className="status-dot" />Synectra Office</span>
+            <span className="hud-clock">{new Intl.DateTimeFormat('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit', hour12: false }).format(now).replace('.', ':')}<small>WIB</small></span>
+            <span className="hud-date">{new Intl.DateTimeFormat('id-ID', { timeZone: 'Asia/Jakarta', weekday: 'long', day: 'numeric', month: 'short' }).format(now)}</span>
+          </div>
+          <div className="hud-lot-status">
+            <span className={`hud-chip state-${displayedWorkState}`} title="Status kerja pemilik dari server"><i aria-hidden="true" />{workStateLabel[displayedWorkState]}</span>
+            <span className="hud-chip"><Icon name={atmosphere === 'day' ? 'sun' : atmosphere === 'sunset' ? 'sunset' : 'moon'} />{atmosphere === 'day' ? 'Siang' : atmosphere === 'sunset' ? 'Sore' : 'Malam'}</span>
+          </div>
+          <p className="hud-lot-activity" role="status">{quiet ? 'Mode tenang · animasi dijeda' : visibleActivity}</p>
+        </header>
         {/* Office viewport */}
         <div className="office-canvas" ref={containerRef}>
           {loaded && !error && (Object.entries(officeObjects) as [OfficeObjectId, typeof officeObjects[OfficeObjectId]][]).map(([id, object]) => {
             const member = team.findIndex(person => person.id === id);
+            const staffStatus = member >= 0 && id !== 'reception' ? staffSnapshot?.staff[id as StaffId] : undefined;
+            const statusText = staffStatus ? staffStatus.active ? staffStatus.activity : 'Tidak ada operasi terpantau' : 'Status belum tersedia';
+            const life = member >= 0 ? actorStates?.[id as ActorId] : undefined;
             return <button key={id} ref={element => {
               if (element) labelRefs.current.set(id, element); else labelRefs.current.delete(id);
               managerRef.current?.attachLabel(id, element);
-            }} className={`object-label ${member >= 0 ? 'person-label' : 'prop-label'}${selected === id ? ' selected' : ''}`} onClick={() => select(id)} aria-label={`Buka ${object.name}`} title={object.name}>
-              {member >= 0 ? <>{!quiet && <span className="label-bubble" aria-hidden="true">{member === 3 ? visibleActivity : poseLabel[staffPoses[id as StaffId]]}</span>}<span className={`portrait portrait-${member}`} /><span>{object.name}</span><span className="label-dot" /></> : <><Icon name={id === 'coffee' ? 'coffee' : id === 'lounge' ? 'sofa' : id === 'board' ? 'board' : id === 'calendar' ? 'calendar' : 'note'} /><span>{object.name}</span></>}
+            }} className={`object-label ${member >= 0 ? 'person-label' : 'prop-label'}${life?.intent.real || staffStatus?.active ? ' is-working' : ''}${selected === id || focusedActor === id ? ' selected' : ''}`} onClick={() => worldSelect.current(id)} aria-label={`Buka ${object.name}${member >= 0 && id !== 'reception' ? `, ${statusText}` : ''}`} title={object.name}>
+              {member >= 0 ? <><span className="label-bubble" aria-hidden="true">{life ? <LifeIcon name={life.moving ? 'stretch' : life.intent.icon} /> : null}<span>{life ? (life.moving ? `Menuju: ${life.intent.label}` : life.intent.label) : member === 3 ? decorativeActivity : statusText}</span></span><Portrait index={member} src={portraits[id as ActorId]} /><span>{object.name}</span><span className="label-dot" /></> : <><Icon name={id === 'coffee' ? 'coffee' : id === 'lounge' ? 'sofa' : id === 'board' ? 'board' : id === 'calendar' ? 'calendar' : id === 'terrace' ? 'waves' : 'note'} /><span>{object.name}</span></>}
             </button>;
           })}
         </div>
@@ -423,56 +503,70 @@ export function OfficeSpikeView({ serverHealth, whatsappStatus, businessActivity
 
         <button type="button" className="open-tablet" onClick={() => select('home')}><Icon name="grid" />Buka tablet</button>
 
-        {/* Viewport Top Bar (Overlay) */}
-        <details className="scene-control-menu"><summary><Icon name="settings" /><span>Kontrol kantor</span></summary>
-        <div className="scene-control-content"><div className="room-controls" aria-label="Fokus ruangan">
-          {[['all', 'Semua ruang'], ['reception', 'Ruang pemilik'], ['admin', 'Area kerja'], ['coffee', 'Pantry'], ['board', 'Rapat'], ['lounge', 'Lounge']].map(([id, name]) => <button key={id} className={roomFilter === id ? 'active' : ''} aria-pressed={roomFilter === id} disabled={!loaded || !!error} onClick={() => focusRoom(id)}>{name}</button>)}
-        </div>
-        <div className="scene-tools">
-          <button
-            className="icon-button"
-            onClick={cycleAtmosphere}
-            aria-label={`Ganti suasana (${atmosphere === 'day' ? 'Siang' : atmosphere === 'sunset' ? 'Sore' : 'Malam'})`}
-            title={`Suasana: ${atmosphere === 'day' ? 'Siang' : atmosphere === 'sunset' ? 'Sore' : 'Malam'}`}
-          >
-            <Icon name={atmosphere === 'day' ? 'sun' : atmosphere === 'sunset' ? 'sunset' : 'moon'} />
-          </button>
-          <button
-            className={`icon-button${audioPref.enabled ? ' active' : ''}`}
-            onClick={toggleAudio}
-            aria-label={audioPref.enabled ? 'Matikan audio kantor' : 'Aktifkan audio kantor (Web Audio)'}
-            aria-pressed={audioPref.enabled}
-            title={audioPref.enabled ? 'Audio sintetis aktif' : 'Audio sintetis senyap'}
-          >
-            <Icon name={audioPref.enabled ? 'volume' : 'mute'} />
-          </button>
-          <button
-            className="icon-button"
-            onClick={() => avatarDialogRef.current?.showModal()}
-            aria-label="Kustomisasi avatar pemilik"
-            title="Kustomisasi avatar"
-          >
-            <Icon name="user" />
-          </button>
-          <button
-            className="icon-button"
-            onClick={() => expansionDialogRef.current?.showModal()}
-            aria-label="Katalog ekspansi ruangan"
-            title="Katalog ekspansi ruangan"
-          >
-            <Icon name="grid" />
-          </button>
-          <button className={`icon-button${quiet ? ' active' : ''}`} disabled={reducedMotion} onClick={() => setPreferences(value => ({ ...value, quiet: !value.quiet }))} aria-label={quiet ? 'Lanjutkan animasi' : 'Aktifkan mode tenang'} aria-pressed={quiet} title={reducedMotion ? 'Mengikuti pengaturan reduced motion perangkat' : 'Mode tenang'}><Icon name={quiet ? 'play' : 'pause'} /></button>
-          <button className="icon-button" onClick={fullscreen} aria-label="Layar penuh" title="Layar penuh"><Icon name="expand" /></button>
-          <button className="icon-button" onClick={() => helpRef.current?.showModal()} aria-label="Panduan kontrol" title="Panduan kontrol"><Icon name="help" /></button>
+        <nav className="hud-toolbar" aria-label="Kontrol kantor">
+          <button type="button" className="hud-round" onClick={cycleAtmosphere} aria-label={`Ganti suasana (${atmosphere === 'day' ? 'Siang' : atmosphere === 'sunset' ? 'Sore' : 'Malam'})`} title={`Suasana: ${atmosphere === 'day' ? 'Siang' : atmosphere === 'sunset' ? 'Sore' : 'Malam'}`}><Icon name={atmosphere === 'day' ? 'sun' : atmosphere === 'sunset' ? 'sunset' : 'moon'} /></button>
+          <button type="button" className={`hud-round${audioPref.enabled ? ' active' : ''}`} onClick={toggleAudio} aria-label={audioPref.enabled ? 'Matikan audio kantor' : 'Aktifkan audio kantor (Web Audio)'} aria-pressed={audioPref.enabled} title={audioPref.enabled ? 'Audio sintetis aktif' : 'Audio sintetis senyap'}><Icon name={audioPref.enabled ? 'volume' : 'mute'} /></button>
+          <button type="button" className="hud-round" onClick={() => avatarDialogRef.current?.showModal()} aria-label="Kustomisasi avatar pemilik" title="Kustomisasi avatar"><Icon name="user" /></button>
+          <button type="button" className="hud-round" onClick={() => expansionDialogRef.current?.showModal()} aria-label="Katalog ekspansi ruangan" title="Katalog ekspansi ruangan"><Icon name="grid" /></button>
+          <button type="button" className={`hud-round${quiet ? ' active' : ''}`} disabled={reducedMotion} onClick={() => setPreferences(value => ({ ...value, quiet: !value.quiet }))} aria-label={quiet ? 'Lanjutkan animasi' : 'Aktifkan mode tenang'} aria-pressed={quiet} title={reducedMotion ? 'Mengikuti pengaturan reduced motion perangkat' : 'Mode tenang'}><Icon name={quiet ? 'play' : 'pause'} /></button>
+          <button type="button" className="hud-round" onClick={fullscreen} aria-label="Layar penuh" title="Layar penuh"><Icon name="expand" /></button>
+          <button type="button" className="hud-round" onClick={() => helpRef.current?.showModal()} aria-label="Panduan kontrol" title="Panduan kontrol"><Icon name="help" /></button>
+        </nav>
+
+        <div className="hud-camera" aria-label="Kamera">
+          <button type="button" className="hud-round" aria-label="Putar kamera ke kiri" title="Putar kiri (Q)" disabled={!loaded || !!error} onClick={() => managerRef.current?.rotate(-1)}><Icon name="reset" /></button>
+          <button type="button" className="hud-round mirror" aria-label="Putar kamera ke kanan" title="Putar kanan (E)" disabled={!loaded || !!error} onClick={() => managerRef.current?.rotate(1)}><Icon name="reset" /></button>
+          <span className="hud-divider" />
+          <button type="button" className="hud-round" aria-label="Perbesar" title="Perbesar (+)" disabled={!loaded || !!error} onClick={() => managerRef.current?.zoom(1.2)}><Icon name="plus" /></button>
+          <button type="button" className="hud-round" aria-label="Perkecil" title="Perkecil (−)" disabled={!loaded || !!error} onClick={() => managerRef.current?.zoom(1 / 1.2)}><Icon name="minus" /></button>
+          <button type="button" className="hud-round" aria-label="Reset kamera" title="Reset kamera" disabled={!loaded || !!error} onClick={() => focusRoom('all')}><Icon name="focus" /></button>
+          <label className="hud-jump"><span className="sr-only">Lompat ke ruangan</span>
+            <select aria-label="Lompat ke ruangan" value={roomFilter} disabled={!loaded || !!error} onChange={event => focusRoom(event.target.value)}>
+              {[['all', 'Seluruh lot'], ['reception', 'Ruang pemilik'], ['admin', 'Area kerja'], ['board', 'Ruang rapat'], ['coffee', 'Pantry'], ['lounge', 'Lounge'], ['terrace', 'Teras kolam']].map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+            </select>
+          </label>
         </div>
 
-        {/* Viewport Bottom Controls (Overlay) */}
-        <div className="scene-bottom">
-          <div className="ambient-activity"><span className={quiet ? 'activity-orb paused' : 'activity-orb'} /><div><span>Suasana kantor <small>· dekoratif</small></span><p role="status">{quiet ? 'Mode tenang · animasi dijeda' : visibleActivity}</p><small>{workStateLabel[displayedWorkState]} · heartbeat {heartbeatAt ? new Date(heartbeatAt).toLocaleTimeString('id-ID') : '—'}</small></div></div>
-          {/* Camera Preset Controls */}
-          <div className="camera-controls"><button className="icon-button" aria-label="Perkecil" onClick={() => managerRef.current?.zoom(1 / 1.2)}><Icon name="minus" /></button><span className="camera-mode">Isometrik</span><button className="icon-button" aria-label="Perbesar" onClick={() => managerRef.current?.zoom(1.2)}><Icon name="plus" /></button><span className="tool-divider" /><button className="icon-button" aria-label="Reset kamera" title="Reset kamera" onClick={() => focusRoom('all')}><Icon name="reset" /></button></div>
-        </div></div></details>
+        <section className="hud-household" aria-label="Penghuni kantor">
+          {team.map((member, index) => {
+            const life = actorStates?.[member.id as ActorId];
+            return <button key={member.id} type="button" className={`hud-member${focusedActor === member.id ? ' active' : ''}${life?.intent.real ? ' is-real' : ''}`} onClick={() => focusActor(focusedActor === member.id ? null : member.id as ActorId)} aria-pressed={focusedActor === member.id} aria-label={`${member.name}: ${life?.intent.label ?? member.role}`} title={`${member.name} · ${life?.intent.label ?? member.role}`}>
+              <Portrait index={index} src={portraits[member.id as ActorId]} />
+              <span className="hud-member-name">{member.name}</span>
+            </button>;
+          })}
+        </section>
+
+        {focusedActor && (() => {
+          const index = team.findIndex(member => member.id === focusedActor);
+          const member = team[index]!;
+          const staff = focusedActor === 'reception' ? undefined : staffSnapshot?.staff[focusedActor];
+          const realStatus = focusedActor === 'reception' ? `Status kerja: ${workStateLabel[displayedWorkState]}` : staff ? staff.active ? `Operasi nyata: ${staff.activity}` : actorStates?.[focusedActor]?.intent.real ? 'Operasi baru saja selesai di server' : 'Tidak ada operasi nyata saat ini' : 'Status operasi belum tersedia';
+          return <SimPanel id={focusedActor} index={index} name={member.name} role={member.role} portrait={portraits[focusedActor]} state={actorStates?.[focusedActor]} realStatus={realStatus}
+            lastEvent={focusedActor === 'reception' ? undefined : staffEvents[focusedActor]} following={following}
+            onClose={() => focusActor(null)} onOpen={() => select(focusedActor === 'reception' ? 'home' : focusedActor)}
+            onFollow={() => { const next = !following; setFollowing(next); managerRef.current?.follow(next ? focusedActor : null); }}>
+            {focusedActor === 'reception' ? <div className="sim-interactions" aria-label="Interaksi pemilik">
+              <button type="button" disabled={moving || quiet || !loaded || !!error} onClick={() => visit('coffee')}><Icon name="coffee" />Ambil kopi</button>
+              <button type="button" disabled={moving || quiet || !loaded || !!error} onClick={() => visit('lounge')}><Icon name="sofa" />Duduk di lounge</button>
+              <button type="button" disabled={moving || quiet || !loaded || !!error} onClick={() => visit('terrace')}><Icon name="waves" />Ke teras kolam</button>
+              <button type="button" disabled={moving || quiet || !loaded || !!error} onClick={() => visit('office')}><Icon name="home" />Kembali ke meja</button>
+            </div> : <div className="sim-interactions" aria-label={`Interaksi ${member.name}`}>
+              {([['drink', 'coffee', 'Istirahat kopi'], ['rest', 'sofa', 'Duduk di sofa'], ['sit', 'reset', 'Kembali otomatis']] as const).map(([pose, icon, label]) => <button key={pose} type="button" disabled={!loaded || !!error || staff?.active === true} aria-pressed={staffPoses[focusedActor] === pose} onClick={() => setStaffPose(focusedActor, pose)}><Icon name={icon} />{label}</button>)}
+            </div>}
+          </SimPanel>;
+        })()}
+
+        {feed.length > 0 && <ol className="hud-feed" aria-label="Notifikasi kantor" aria-live="polite">
+          {feed.map(item => {
+            const index = team.findIndex(member => member.id === item.who);
+            return <li key={item.id} className={`feed-${item.tone}`}>
+              <Portrait index={index} src={portraits[item.who]} />
+              <div><strong>{team[index]?.name}</strong><span>{item.text}</span></div>
+              <button type="button" aria-label="Tutup notifikasi" onClick={() => setFeed(current => current.filter(entry => entry.id !== item.id))}>×</button>
+            </li>;
+          })}
+        </ol>}
       </section>
 
       {detail && selected && <aside ref={drawerRef} className="office-drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
@@ -486,7 +580,7 @@ export function OfficeSpikeView({ serverHealth, whatsappStatus, businessActivity
         <div className="drawer-identity">{activeApp ? <span className={`tablet-app-icon app-${activeApp.id}`} aria-hidden="true"><Icon name={activeApp.icon} /></span> : memberIndex >= 0 ? <span className={`portrait portrait-large portrait-${memberIndex}`} /> : <div className="object-emblem"><Icon name={selected === 'coffee' ? 'coffee' : selected === 'lounge' ? 'sofa' : selected === 'calendar' ? 'calendar' : selected === 'board' ? 'board' : 'note'} /></div>}<span>{detail.role}</span><h2 id="drawer-title" ref={drawerTitle} tabIndex={-1}>{detail.name}</h2><p>{detail.description}</p></div>
         {selected === 'admin' && <div className="drawer-shortcuts" aria-label="Akses dokumen"><button type="button" onClick={() => select('dashboard')}>Dashboard <Icon name="arrow" /></button><button type="button" onClick={() => select('payments')}>Pembayaran <Icon name="arrow" /></button><button type="button" onClick={() => select('archive')}>Klien &amp; arsip <Icon name="arrow" /></button><button type="button" onClick={() => select('printer')}>Printer PDF <Icon name="arrow" /></button><button type="button" onClick={() => select('signature')}>Tanda tangan <Icon name="arrow" /></button></div>}
         {selected !== 'signature' && selected !== 'dashboard' && selected !== 'payments' && <button className="secondary-button focus-room-button" disabled={!loaded || !!error} onClick={() => { managerRef.current?.focus(selected); setRoomFilter(selected); }}><Icon name="focus" />Fokus ke ruangan</button>}
-        {(selected === 'hermes' || selected === 'admin' || selected === 'communication') && <details className="drawer-section"><summary>Animasi karakter</summary><p className="small-note">Aktivitas visual di tempat, terpisah dari pekerjaan bisnis.</p><div className="visit-actions">{([['idle', 'Diam'], ['walk', 'Berjalan di tempat'], ['sit', 'Bekerja'], ['drink', 'Minum'], ['rest', 'Istirahat']] as const).map(([pose, label]) => <button key={pose} className="secondary-button" type="button" disabled={!loaded || !!error} aria-pressed={staffPoses[selected] === pose} onClick={() => setStaffPose(selected, pose)}>{label}</button>)}</div></details>}
+        {(selected === 'hermes' || selected === 'admin' || selected === 'communication') && <details className="drawer-section"><summary>Animasi karakter</summary><p className="small-note">Animasi otomatis mengikuti operasi terpantau. Pilihan manual tersedia saat tidak ada operasi aktif.</p><div className="visit-actions">{([['idle', 'Diam'], ['walk', 'Berjalan di tempat'], ['sit', 'Otomatis'], ['drink', 'Minum'], ['rest', 'Istirahat']] as const).map(([pose, label]) => <button key={pose} className="secondary-button" type="button" disabled={!loaded || !!error || staffSnapshot?.staff[selected].active === true} aria-pressed={staffPoses[selected] === pose} onClick={() => setStaffPose(selected, pose)}>{label}</button>)}</div></details>}
         {selected === 'dashboard' ? <div className="drawer-section">{dashboardPanel}</div> : selected === 'payments' ? <div className="drawer-section">{paymentPanel}</div> : selected === 'signature' ? <div className="drawer-section">{signaturePanel}</div> : selected === 'communication' ? <div className="communications-panel">{communicationPanel}</div> : selected === 'admin' ? <div className="drawer-section">{userEmail && <div className="drawer-account"><span>{userEmail}</span>{onLogout && <button className="text-button" onClick={onLogout}>Keluar</button>}</div>}{adminPanel}</div> : selected === 'printer' ? <div className="drawer-section">{printerPanel}</div> : selected === 'archive' ? <div className="drawer-section">{archivePanel}</div> : selected === 'coffee' || selected === 'lounge' || selected === 'reception' ? <div className="drawer-section"><span className="eyebrow">Jeda kecil, ide baru</span><h3>Nikmati suasananya</h3><p>Gerakan pemilik hanya aktivitas visual dan tidak menjalankan pekerjaan bisnis.</p><div className="visit-actions"><button className="secondary-button" disabled={moving || quiet || !loaded || !!error} onClick={() => visit('coffee')}><Icon name="coffee" />Ambil kopi<Icon name="arrow" /></button><button className="secondary-button" disabled={moving || quiet || !loaded || !!error} onClick={() => visit('lounge')}><Icon name="sofa" />Duduk di lounge<Icon name="arrow" /></button><button className="secondary-button" disabled={moving || quiet || !loaded || !!error} onClick={() => visit('terrace')}><Icon name="waves" />Ke teras kolam<Icon name="arrow" /></button><button className="text-button" disabled={moving || quiet || !loaded || !!error} onClick={() => visit('office')}>Kembali ke ruang pemilik</button></div><p className="small-note">{quiet ? 'Lanjutkan animasi untuk mengajak pemilik berjalan.' : moving ? 'Pemilik sedang berjalan. Tunggu hingga tiba.' : decorativeActivity}</p></div> : selected === 'hermes' ? <div className="drawer-section hermes-section">{hermesPanel ?? <><h3>Ruang berpikir bersama</h3><p>Percakapan dan status kerja Hermes belum terhubung ke kantor.</p></>}</div> : selected === 'board' ? <div className="drawer-section kanban-drawer-section">{boardPanel}</div> : selected === 'calendar' ? <div className="drawer-section calendar-drawer-section">{calendarPanel ?? <><h3>Kalender kerja & cron</h3><p>Jadwal belum terhubung ke kantor.</p></>}</div> : <div className="drawer-section"><span className="availability">Belum aktif</span><h3>Ruang untuk rencana Anda</h3><p>Layanan ini menunggu task berikutnya.</p></div>}
         <div className="drawer-footer"><span className="status-dot muted" />Simulasi visual · data bisnis terpisah</div>
         </>}
@@ -497,12 +591,11 @@ export function OfficeSpikeView({ serverHealth, whatsappStatus, businessActivity
       </aside>}
     </div>
 
-    <footer className="office-footer"><details className="office-footer-menu"><summary><Icon name="user" /><span>Tim &amp; tampilan</span></summary><div className="office-footer-content">
+    <footer className="office-footer"><details className="office-footer-menu"><summary><Icon name="settings" /><span>Menu &amp; status</span></summary><div className="office-footer-content">
       <nav aria-label="Navigasi utama">
         {([{ title: 'Kantor', icon: 'home', id: null }, { title: 'Nota', icon: 'note', id: 'admin' }, { title: 'Kanban', icon: 'board', id: 'board' }, { title: 'Jadwal', icon: 'calendar', id: 'calendar' }] as const).map(item =>
           <button key={item.title} className={activeNav === item.title ? 'nav-item active' : 'nav-item'} aria-current={activeNav === item.title ? 'page' : undefined} onClick={() => item.id ? select(item.id) : close()}><Icon name={item.icon} /><span>{item.title}</span></button>)}
       </nav>
-      <div className="team-list"><span className="team-heading">Di kantor</span>{team.map((member, index) => <button key={member.id} onClick={() => select(member.id)} aria-label={`Profil ${member.name}`} className={selected === member.id ? 'active' : ''}><span className={`portrait portrait-${index}`} /><span>{member.name}<small>{member.role}</small></span></button>)}</div>
       <button
         type="button"
         className="footer-status"
@@ -618,7 +711,7 @@ export function OfficeSpikeView({ serverHealth, whatsappStatus, businessActivity
         </button>
       </div>
       <p style={{ margin: '8px 0 16px', fontSize: '12px', color: '#60786a' }}>
-        Personalisasikan penampilan visual avatar pemilik di kanvas isometrik. Preferensi tersimpan otomatis di browser lokal.
+        Personalisasikan penampilan avatar 3D pemilik. Preferensi tersimpan otomatis di browser lokal.
       </p>
 
       <div className="avatar-customizer-form">

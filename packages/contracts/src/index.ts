@@ -144,6 +144,18 @@ export const deliveryAttemptSchema = z.object({
 export type DeliveryAttempt = z.infer<typeof deliveryAttemptSchema>;
 
 // Office status & business event contracts
+export const officeStaffIdSchema = z.enum(['hermes', 'admin', 'communication']);
+export type OfficeStaffId = z.infer<typeof officeStaffIdSchema>;
+export const officeStaffActivitySchema = z.discriminatedUnion('active', [
+  z.object({ active: z.literal(true), activity: z.string().min(1) }),
+  z.object({ active: z.literal(false), activity: z.null() })
+]);
+export const officeStaffSnapshotSchema = z.object({
+  revision: z.number().int().nonnegative(),
+  staff: z.object({ hermes: officeStaffActivitySchema, admin: officeStaffActivitySchema, communication: officeStaffActivitySchema })
+});
+export type OfficeStaffSnapshot = z.infer<typeof officeStaffSnapshotSchema>;
+
 export const workStateSchema = z.enum(['working', 'available', 'away', 'stale', 'offline']);
 export type WorkState = z.infer<typeof workStateSchema>;
 

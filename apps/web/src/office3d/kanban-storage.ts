@@ -56,11 +56,13 @@ export function getLockReason(options: {
   stale: boolean;
   isOffline?: boolean;
   mutating: boolean;
+  syncing?: boolean;
   csrfToken: string | null;
 }): string | null {
   if (options.mutating) return 'Menyimpan perubahan...';
   if (!options.csrfToken) return 'Token CSRF tidak tersedia';
   if (!options.hasSnapshot) return 'Papan belum dimuat';
+  if (options.syncing && (options.stale || options.isOffline)) return 'Menunggu sinkronisasi Hermes';
   if (options.isOffline) return 'Snapshot offline (hanya baca)';
   if (options.stale) return 'Snapshot stale (> 2 menit tanpa sinkronisasi)';
   return null;

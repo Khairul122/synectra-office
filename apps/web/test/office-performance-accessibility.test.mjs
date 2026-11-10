@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const cssPath = resolve(__dirname, '../src/office3d/office.css');
 const spikeViewPath = resolve(__dirname, '../src/office3d/OfficeSpikeView.tsx');
-const sceneManagerPath = resolve(__dirname, '../src/office3d/scene-manager-2d.ts');
+const sceneManagerPath = resolve(__dirname, '../src/office3d/scene-manager-3d.ts');
 
 test('DPR clamping formula enforces maximum 1.5 in normal mode and 1.0 in economy mode', () => {
   function computeRatio(dpr, economy) {

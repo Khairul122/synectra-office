@@ -60,3 +60,9 @@ test('getLockReason returns correct messages', () => {
   const stale = { ...optsBase, stale: true };
   assert.equal(getLockReason(stale), 'Snapshot stale (> 2 menit tanpa sinkronisasi)');
 });
+
+test('getLockReason reports a pending Hermes sync instead of stale while syncing', () => {
+  const opts = { hasSnapshot: true, stale: true, isOffline: false, mutating: false, syncing: true, csrfToken: 'token' };
+  assert.equal(getLockReason(opts), 'Menunggu sinkronisasi Hermes');
+  assert.equal(getLockReason({ ...opts, syncing: false }), 'Snapshot stale (> 2 menit tanpa sinkronisasi)');
+});

@@ -4,6 +4,8 @@ import { buildApp } from '../src/bootstrap/app';
 import { createExpiredSessionForTests, createSessionForTests, resetSessionsForTests, revokeSession } from '../src/modules/auth/application/auth-service';
 import { getOfficeSnapshots, publishBusinessEvent, publishStatus, resetOfficeEventsForTests, setOfficeStatusStoreForTests, subscribeOffice } from '../src/modules/office/application/office-event-service';
 import type { OfficeEvent, OfficeStatusRecord, OfficeStatusStore } from '../src/modules/office/infrastructure/office-status-store';
+import { beginStaffActivity } from '../src/modules/office/application/staff-activity';
+import { officeStaffSnapshotSchema } from '@synectra/contracts';
 
 beforeEach(() => {
   resetSessionsForTests();
@@ -190,6 +192,40 @@ test('streams SSE events only for the authenticated owner', async () => {
     assert.match(chunk, /"activity":"Menyapa"/);
     await reader.cancel();
   } finally {
+    controller.abort();
+    await app.close();
+  }
+});
+
+
+test('staff snapshot and stream expose only the authenticated owner activity', async () => {
+  const app = buildApp();
+  const address = await app.listen({ host: '127.0.0.1', port: 0 });
+  const tokenA = createSessionForTests('staff-owner-a').token;
+  const tokenB = createSessionForTests('staff-owner-b').token;
+  const controller = new AbortController();
+  let finish: (() => void) | undefined;
+  try {
+    assert.equal((await app.inject({ method: 'GET', url: '/api/office/staff' })).statusCode, 401);
+    finish = beginStaffActivity('staff-owner-b', 'admin', 'Membuat PDF');
+    const ownResponse = await app.inject({ method: 'GET', url: '/api/office/staff', headers: { cookie: `synectra_session=${tokenA}` } });
+    const otherResponse = await app.inject({ method: 'GET', url: '/api/office/staff', headers: { cookie: `synectra_session=${tokenB}` } });
+    assert.equal(officeStaffSnapshotSchema.parse(ownResponse.json()).staff.admin.active, false);
+    assert.equal(officeStaffSnapshotSchema.parse(otherResponse.json()).staff.admin.active, true);
+
+    const stream = await fetch(`${address}/api/office/events`, { headers: { cookie: `synectra_session=${tokenA}` }, signal: controller.signal });
+    const reader = stream.body!.getReader();
+    const initial = new TextDecoder().decode((await reader.read()).value);
+    assert.match(initial, /event: staff/);
+    const release = beginStaffActivity('staff-owner-a', 'communication', 'Memproses pengiriman WhatsApp');
+    const changed = new TextDecoder().decode((await reader.read()).value);
+    assert.match(changed, /event: staff/);
+    assert.match(changed, /Memproses pengiriman WhatsApp/);
+    assert.doesNotMatch(changed, /Membuat PDF/);
+    release();
+    await reader.cancel();
+  } finally {
+    finish?.();
     controller.abort();
     await app.close();
   }

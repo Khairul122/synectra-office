@@ -164,22 +164,30 @@ function App() {
     return () => { cancelled = true; window.clearInterval(timer); window.removeEventListener('focus', checkSession); document.removeEventListener('visibilitychange', checkSession); };
   }, [userEmail, restoreSession]);
 
-  // Health check
+  // Refresh health after outages and when the page becomes visible again.
   useEffect(() => {
     const controller = new AbortController();
-    fetch('/health', { signal: controller.signal })
-      .then((res) => {
-        if (!res.ok) throw new Error('Health check failed');
-        return res.json();
-      })
-      .then((data) => {
-        const parsed = healthResponseSchema.parse(data);
-        setServerHealth(parsed.status === 'ok' ? 'Aktif' : 'Gangguan');
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) setServerHealth('Tidak tersedia');
-      });
-    return () => controller.abort();
+    let sequence = 0;
+    const checkHealth = () => {
+      const current = ++sequence;
+      fetch('/health', { signal: controller.signal })
+        .then((res) => {
+          if (!res.ok) throw new Error('Health check failed');
+          return res.json();
+        })
+        .then((data) => {
+          const parsed = healthResponseSchema.parse(data);
+          if (current === sequence) setServerHealth(parsed.status === 'ok' ? 'Aktif' : 'Gangguan');
+        })
+        .catch(() => {
+          if (!controller.signal.aborted && current === sequence) setServerHealth('Tidak tersedia');
+        });
+    };
+    const onVisible = () => { if (!document.hidden) checkHealth(); };
+    checkHealth();
+    const timer = window.setInterval(checkHealth, 30000);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { controller.abort(); clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); };
   }, []);
 
   const handleGoogleLogin = async () => {

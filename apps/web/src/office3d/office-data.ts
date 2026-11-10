@@ -35,7 +35,7 @@ export const expansionRooms: Record<ExpansionRoomId, ExpansionRoom> = {
     status: 'active',
     accentColor: '#388DA7',
     description: 'Area santai luar ruangan berlantai dek kayu dengan kolam renang turquoise.',
-    budgetNotes: 'Canvas 2D isometric rendering terintegrasi, tetap di dalam batas 5 draw calls.',
+    budgetNotes: 'Teras 3D terintegrasi dengan kontrol kualitas visual.',
   },
   studio: {
     id: 'studio',

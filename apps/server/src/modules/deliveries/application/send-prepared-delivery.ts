@@ -3,9 +3,12 @@ import { findPdfAssetByHash, readPdf } from '../../invoice/application/pdf-servi
 import { getInvoicePayments, paymentFingerprint } from '../../payment/application/payment-service';
 import { claimDelivery, getApproval, getDelivery, recordAttemptAndComplete } from './delivery-service';
 import { completeInvoiceSend, reserveInvoiceSend } from './invoice-send-guard';
+import { beginStaffActivity } from '../../office/application/staff-activity';
 
 export class DeliverySendError extends Error { constructor(message: string, readonly statusCode: number) { super(message); } }
 export async function sendPreparedDelivery(ownerId: string, deliveryId: string, whatsapp: WhatsappService) {
+  const finishActivity = beginStaffActivity(ownerId, 'communication', 'Memproses pengiriman WhatsApp');
+  try {
   const delivery = await getDelivery(ownerId, deliveryId);
   if (!delivery) throw new DeliverySendError('Delivery not found', 404);
   const approval = await getApproval(ownerId, delivery.approvalId);
@@ -34,4 +37,5 @@ export async function sendPreparedDelivery(ownerId: string, deliveryId: string, 
     await completeInvoiceSend(ownerId, reserved.key, reserved.token, dispatchStarted ? 'unknown' : 'failed').catch(() => undefined);
     throw error;
   }
+  } finally { finishActivity(); }
 }
