@@ -1,0 +1,279 @@
+/*
+ * Tablet app pages: one design language for every app, tinted with the app's dock color.
+ * Loaded after redesign.css. Every rule is scoped to .tablet-screen so the office scene is untouched.
+ *   --accent        tile/decoration color (same as the dock icon)
+ *   --accent-strong button background with white text (WCAG AA >= 4.5:1)
+ *   --accent-ink    accent text on light surfaces
+ *   --accent-soft   tinted surface (selected states, secondary buttons)
+ */
+.tablet-screen {
+  --accent: #5c7ee5; --accent-strong: #3d5fc4; --accent-ink: #2f4a9e; --accent-soft: #e8eefd;
+  --surface: #fff; --canvas: #f4f6fb; --line: #e1e7f0; --line-strong: #cfd8e6;
+  --ink: #1f2b40; --ink-2: #44526a; --ink-3: #5f6c83;
+  --ok-bg: #e3f4ea; --ok-ink: #1f6141; --warn-bg: #fdf1dc; --warn-ink: #7a5212; --danger-bg: #fde8ea; --danger-ink: #9b2c3c; --info-bg: #e3f1fa; --info-ink: #1f5f80;
+  --r-lg: 20px; --r-md: 14px; --r-sm: 10px;
+}
+.tablet-screen[data-app="payments"], .tablet-screen[data-app="communication"] { --accent: #42a882; --accent-strong: #23795a; --accent-ink: #1d5f47; --accent-soft: #e2f3ec; }
+.tablet-screen[data-app="admin"], .tablet-screen[data-app="printer"] { --accent: #ed9875; --accent-strong: #b4542b; --accent-ink: #8f4120; --accent-soft: #fcebe3; }
+.tablet-screen[data-app="archive"], .tablet-screen[data-app="hermes"] { --accent: #a579d6; --accent-strong: #7a4bb3; --accent-ink: #5f3591; --accent-soft: #f1e9fb; }
+.tablet-screen[data-app="board"], .tablet-screen[data-app="signature"] { --accent: #668cdd; --accent-strong: #3f64b8; --accent-ink: #2f4c90; --accent-soft: #e6edfb; }
+.tablet-screen[data-app="calendar"] { --accent: #e87984; --accent-strong: #b83a4b; --accent-ink: #932b3a; --accent-soft: #fce8ea; }
+
+/* ---------- Page header: app tile + eyebrow + title + description ---------- */
+.tablet-screen[data-app] .tablet-content { padding-top: 8px; }
+.tablet-screen[data-app] .drawer-identity {
+  display: grid; grid-template-columns: auto 1fr; column-gap: 16px; row-gap: 2px; align-items: center;
+  margin: 10px 0 22px; padding: 0 0 20px; border-bottom: 1px solid var(--line);
+}
+.tablet-screen[data-app] .drawer-identity > .tablet-app-icon { display: grid; place-items: center; grid-row: span 2; color: #fff; width: 56px; height: 56px; margin: 0; border-radius: 18px; box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 35%, transparent); }
+.tablet-screen[data-app] .drawer-identity > .tablet-app-icon svg { width: 27px; height: 27px; }
+.tablet-screen[data-app] .drawer-identity > span:not(.tablet-app-icon) { align-self: end; color: var(--accent-ink); font-size: 12px; font-weight: 700; letter-spacing: .04em; }
+.tablet-screen[data-app] .drawer-identity h2 { align-self: start; margin: 0; color: var(--ink); font-size: clamp(24px, 3vw, 30px); font-weight: 650; line-height: 1.15; letter-spacing: -.02em; }
+.tablet-screen[data-app] .drawer-identity p { grid-column: 1 / -1; margin: 10px 0 0; color: var(--ink-2); font-size: 14px; }
+.tablet-screen[data-app] .drawer-footer { display: none; }
+.tablet-screen[data-app] .focus-room-button { min-height: 34px; margin-bottom: 14px; padding: 0 12px; font-size: 12px; }
+.tablet-screen[data-app] details.drawer-section { margin-bottom: 14px; padding: 0; border: 0; }
+.tablet-screen[data-app] details.drawer-section > summary { color: var(--ink-3); font-size: 13px; font-weight: 600; cursor: pointer; }
+
+/* The page header already names the app; the panel's own first heading stays for screen readers only. */
+.tablet-screen[data-app] .drawer-section > section > h2:first-child,
+.tablet-screen[data-app] .drawer-section > .finance-panel > h2:first-child {
+  position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+}
+
+/* ---------- Page body ---------- */
+.tablet-screen[data-app] .tablet-content .drawer-section { padding-top: 0; border-top: 0; color: var(--ink); }
+.tablet-screen[data-app] .tablet-content .drawer-section p:not([class]) { color: var(--ink-2); font-size: 14px; line-height: 1.55; }
+.tablet-screen[data-app] .tablet-content .drawer-section h3 { margin: 28px 0 12px; color: var(--ink); font-size: 16px; font-weight: 650; }
+.tablet-screen[data-app] .tablet-content .drawer-section h3:first-child,
+.tablet-screen[data-app] .tablet-content .drawer-section h2:first-child + h3,
+.tablet-screen[data-app] .tablet-content .drawer-section [role="alert"] + h3,
+.tablet-screen[data-app] .tablet-content .drawer-section [role="status"] + h3 { margin-top: 4px; }
+.tablet-screen[data-app] .tablet-content .drawer-section h3 + p:not([class]) { margin: -6px 0 12px; color: var(--ink-3); font-size: 13px; }
+.tablet-screen[data-app] .tablet-content .drawer-account { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; padding: 10px 14px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); font-size: 13px; }
+
+/* ---------- Forms: a white card with a responsive two-column grid ---------- */
+.tablet-screen[data-app] .tablet-content :is(.drawer-section, .drawer-section > section, .drawer-section > .finance-panel) > form,
+.tablet-screen[data-app] .tablet-content .ui-form {
+  display: grid !important; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px 18px !important; align-items: start;
+  margin: 0 0 8px; padding: 20px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface);
+}
+.tablet-screen[data-app] .tablet-content :is(.drawer-section, .drawer-section > section, .drawer-section > .finance-panel) > form > :is(p, div, fieldset, button, .finance-actions, h4),
+.tablet-screen[data-app] .tablet-content :is(.drawer-section, .drawer-section > section, .drawer-section > .finance-panel) > form > label:has(textarea),
+.tablet-screen[data-app] .tablet-content .ui-span-all { grid-column: 1 / -1; }
+.tablet-screen[data-app] .tablet-content :is(.drawer-section, .drawer-section > section, .drawer-section > .finance-panel) > form > p { margin: -6px 0 0; color: var(--ink-3); font-size: 13px; }
+.tablet-screen[data-app] .tablet-content :is(.drawer-section, .drawer-section > section, .drawer-section > .finance-panel) > form > button { justify-self: start; }
+.tablet-screen[data-app] .tablet-content :is(.drawer-section, .kanban-panel, .calendar-schedule-panel, .communications-panel) label {
+  display: grid; gap: 7px; color: var(--ink-2); font-size: 13px; font-weight: 600;
+}
+.tablet-screen[data-app] .tablet-content :is(.drawer-section, .kanban-panel, .communications-panel) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), select, textarea) {
+  width: 100%; min-height: 44px; padding: 10px 14px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--surface); color: var(--ink); font-size: 14px; font-weight: 400;
+  transition: border-color .15s, box-shadow .15s;
+}
+.tablet-screen[data-app] .tablet-content :is(.drawer-section, .kanban-panel) textarea { min-height: 88px; resize: vertical; line-height: 1.5; }
+.tablet-screen[data-app] .tablet-content :is(.drawer-section, .kanban-panel) input[type="file"] { padding: 8px; border: 1px dashed var(--line-strong); border-radius: 12px; background: var(--canvas); font-size: 13px; }
+.tablet-screen[data-app] .tablet-content :is(input, select, textarea):focus-visible {
+  outline: none; border-color: var(--accent-strong); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.tablet-screen[data-app] .tablet-content :is(input, select, textarea):disabled { background: var(--canvas); color: var(--ink-3); }
+
+/* ---------- Buttons ---------- */
+.tablet-screen[data-app] .tablet-content :is(.primary-button, form > button[type="submit"], .finance-actions > button[type="submit"], :is(.drawer-section, .drawer-section > section, .drawer-section > .finance-panel) > form > button:not([type="button"])) {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 20px;
+  border: 0; border-radius: 999px; background: var(--accent-strong); color: #fff; font-size: 14px; font-weight: 650; cursor: pointer;
+}
+.tablet-screen[data-app] .tablet-content :is(.primary-button, form > button[type="submit"], .finance-actions > button[type="submit"]):hover:not(:disabled) { background: var(--accent-ink); }
+.tablet-screen[data-app] .tablet-content :is(.secondary-button, .drawer-shortcuts button, .finance-list button, .drawer-section li > button, .finance-actions > button[type="button"]) {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; padding: 0 16px;
+  border: 1px solid transparent; border-radius: 999px; background: var(--accent-soft); color: var(--accent-ink); font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.tablet-screen[data-app] .tablet-content :is(.secondary-button, .drawer-shortcuts button, .finance-list button, .drawer-section li > button):hover:not(:disabled) { border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.tablet-screen[data-app] .tablet-content button:disabled { opacity: .55; cursor: not-allowed; }
+.tablet-screen[data-app] .tablet-content button:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: 2px; }
+.tablet-screen[data-app] .tablet-content .text-button { color: var(--accent-ink); font-weight: 600; }
+.tablet-screen[data-app] .tablet-content .ui-danger-text { color: var(--danger-ink); }
+.tablet-screen[data-app] .drawer-shortcuts { gap: 8px; margin-bottom: 18px; }
+
+/* ---------- Feedback banners ---------- */
+.tablet-screen[data-app] .tablet-content :is(.drawer-section, .calendar-schedule-panel) [role="alert"]:not(button),
+.tablet-screen[data-app] .tablet-content .ui-alert--danger,
+.tablet-screen[data-app] .tablet-content .kanban-error {
+  margin: 0 0 14px; padding: 12px 16px; border: 1px solid color-mix(in srgb, var(--danger-ink) 22%, transparent); border-radius: var(--r-md);
+  background: var(--danger-bg); color: var(--danger-ink) !important; font-size: 13px; font-weight: 600;
+}
+.tablet-screen[data-app] .tablet-content .drawer-section p[role="status"] {
+  margin: 0 0 14px; padding: 12px 16px; border-radius: var(--r-md); background: var(--accent-soft); color: var(--accent-ink); font-size: 13px; font-weight: 600;
+}
+.tablet-screen[data-app] .tablet-content .ui-alert { margin: 0; padding: 12px 16px; border-radius: var(--r-md); font-size: 13px; line-height: 1.5; }
+.tablet-screen[data-app] .tablet-content .ui-alert--success { background: var(--ok-bg); color: var(--ok-ink); }
+.tablet-screen[data-app] .tablet-content .ui-alert--warn { background: var(--warn-bg); color: var(--warn-ink); }
+.tablet-screen[data-app] .tablet-content .ui-alert--compact { padding: 8px 12px; border: 0; font-weight: 500; }
+.tablet-screen[data-app] .tablet-content .ui-alert + .secondary-button { margin-bottom: 14px; }
+
+/* ---------- Stats ---------- */
+.tablet-screen[data-app] .tablet-content .finance-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin: 0 0 8px; }
+.tablet-screen[data-app] .tablet-content .finance-stats > div { position: relative; display: grid; gap: 8px; padding: 18px 18px 16px !important; overflow: hidden; }
+.tablet-screen[data-app] .tablet-content .finance-stats > div::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 4px; background: var(--accent); opacity: .35; }
+.tablet-screen[data-app] .tablet-content .finance-stats > div:first-child::before { opacity: 1; }
+.tablet-screen[data-app] .tablet-content .finance-stats span { color: var(--ink-3); font-size: 13px; font-weight: 600; }
+.tablet-screen[data-app] .tablet-content .finance-stats strong { color: var(--ink); font-size: clamp(20px, 2.4vw, 26px); font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+
+/* ---------- Lists as cards: title + meta, status badge on the right ---------- */
+.tablet-screen[data-app] .tablet-content :is(.finance-list, .drawer-section > section > ul) { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.tablet-screen[data-app] .tablet-content :is(.finance-list, .drawer-section > section > ul) > li {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 14px; row-gap: 4px; align-items: center;
+  margin: 0; padding: 14px 18px !important; border: 1px solid var(--line) !important; border-radius: 16px !important; background: var(--surface) !important;
+  color: var(--ink-2); font-size: 13px; line-height: 1.5;
+}
+.tablet-screen[data-app] .tablet-content :is(.finance-list, .drawer-section > section > ul) > li > * { grid-column: 1; }
+.tablet-screen[data-app] .tablet-content .finance-list > li > strong { color: var(--ink); font-size: 14px; font-weight: 650; }
+.tablet-screen[data-app] .tablet-content .finance-list > li > span:last-of-type {
+  grid-column: 2; grid-row: 1; justify-self: end; padding: 3px 10px; border-radius: 999px; background: var(--canvas); color: var(--ink-2); font-size: 12px; font-weight: 650; white-space: nowrap;
+}
+.tablet-screen[data-app] .tablet-content .finance-list > li > .finance-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.tablet-screen[data-app] .tablet-content .finance-list button { min-height: 34px; padding: 0 14px; font-size: 12px; }
+.tablet-screen[data-app] .tablet-content .finance-list button:last-child { background: transparent; color: var(--danger-ink); }
+.tablet-screen[data-app] .tablet-content .finance-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.tablet-screen[data-app] .tablet-content .drawer-section > section > ul > li > button { grid-column: 2; grid-row: 1; margin: 0; }
+
+.tablet-screen .ui-fieldset { grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 16px 18px; min-width: 0; margin: 16px 0 8px; padding: 20px; }
+.tablet-screen .ui-fieldset > legend { float: left; grid-column: 1 / -1; width: 100%; margin: 0; padding: 0; color: var(--ink); font-size: 16px; font-weight: 650; }
+
+/* ---------- Shared primitives (ui-*) used by rewritten panels ---------- */
+.tablet-screen .ui-stack { display: grid; gap: 10px; }
+.tablet-screen .ui-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.tablet-screen .ui-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.tablet-screen .ui-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tablet-screen .ui-actions--end { justify-content: flex-end; grid-column: 1 / -1; }
+.tablet-screen .ui-overline { color: var(--accent-ink); font-size: 12px; font-weight: 700; }
+.tablet-screen .tablet-content .ui-meta { margin: 2px 0 0; color: var(--ink-3); font-size: 13px; }
+.tablet-screen .ui-card { display: grid; gap: 10px; padding: 18px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); }
+.tablet-screen .ui-card--compact { gap: 6px; padding: 14px 16px; border-radius: 16px; font-size: 13px; }
+.tablet-screen .ui-card-title { margin: 0; color: var(--ink); font-size: 16px; font-weight: 650; }
+.tablet-screen .ui-field-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 16px 18px; grid-column: 1 / -1; }
+.tablet-screen .ui-section-label { display: flex; align-items: center; gap: 8px; margin: 18px 0 2px; color: var(--ink); font-size: 16px; font-weight: 650; }
+.tablet-screen .ui-section-label span { padding: 1px 9px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-ink); font-size: 12px; font-weight: 700; }
+.tablet-screen .tablet-content .ui-empty { margin: 0; padding: 22px 18px; border: 1px dashed var(--line-strong); border-radius: var(--r-lg); background: color-mix(in srgb, var(--surface) 60%, transparent); color: var(--ink-3); font-size: 14px; text-align: center; }
+.tablet-screen .ui-badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px; background: var(--canvas); color: var(--ink-2); font-size: 12px; font-weight: 650; white-space: nowrap; }
+.tablet-screen .ui-badge--accent { background: var(--accent-soft); color: var(--accent-ink); }
+.tablet-screen .ui-badge--info { background: var(--info-bg); color: var(--info-ink); }
+.tablet-screen .ui-badge--success { background: var(--ok-bg); color: var(--ok-ink); }
+.tablet-screen .ui-badge--warn { background: var(--warn-bg); color: var(--warn-ink); }
+.tablet-screen .ui-badge--danger { background: var(--danger-bg); color: var(--danger-ink); }
+.tablet-screen .ui-code { margin: 0; padding: 10px 12px; border-radius: var(--r-sm); background: var(--canvas); color: var(--ink-2); font: 13px/1.5 ui-monospace, Consolas, monospace; white-space: pre-wrap; }
+.tablet-screen .ui-tabs { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 5px; border-radius: 999px; background: #e8edf5; }
+.tablet-screen .ui-tab { min-height: 36px; padding: 0 16px; border: 0; border-radius: 999px; background: transparent; color: var(--ink-2); font-size: 13px; font-weight: 600; cursor: pointer; }
+.tablet-screen .ui-tab:hover { background: #ffffffa0; }
+.tablet-screen .ui-tab[aria-pressed="true"] { background: var(--surface); color: var(--accent-ink); box-shadow: 0 1px 4px #2a3b5a1f; }
+.tablet-screen .ui-tabs-end { margin-left: auto; }
+
+/* ---------- Jadwal ---------- */
+.tablet-screen .calendar-schedule-panel { display: grid; gap: 16px; color: var(--ink); }
+.tablet-screen .calendar-schedule-panel > form.ui-form { margin: 0; padding: 20px; }
+.tablet-screen .cal-card { gap: 12px; padding: 16px 18px; transition: border-color .15s, background .15s; }
+.tablet-screen .cal-card.is-selected { border-color: color-mix(in srgb, var(--accent) 60%, transparent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent); }
+.tablet-screen .cal-card-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; width: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.tablet-screen .cal-card-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tablet-screen .cal-card-title strong { color: var(--ink); font-size: 15px; font-weight: 650; }
+.tablet-screen .cal-card-sub { grid-column: 1 / -1; margin: 0; }
+.tablet-screen .cal-card-sub code, .tablet-screen .cal-detail code { padding: 1px 6px; border-radius: 6px; background: var(--canvas); font-size: 12px; }
+.tablet-screen .cal-card-meta { display: flex; justify-content: space-between; gap: 6px 16px; flex-wrap: wrap; margin: 0; }
+.tablet-screen .cal-pause { display: inline-flex; align-items: center; gap: 6px; }
+.tablet-screen .cal-pause input { width: 170px; min-height: 40px; padding: 0 14px; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--surface); color: var(--ink); font-size: 13px; }
+.tablet-screen .cal-pause input:focus-visible { outline: none; border-color: var(--accent-strong); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent); }
+.tablet-screen .cal-detail { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px 18px; margin: 0; padding-top: 14px; border-top: 1px solid var(--line); }
+.tablet-screen .cal-detail dt { color: var(--ink-3); font-size: 12px; font-weight: 600; }
+.tablet-screen .cal-detail dd { margin: 3px 0 0; color: var(--ink); font-size: 13px; overflow-wrap: anywhere; }
+.tablet-screen .tablet-content .cal-run-summary { margin: 0; color: var(--ink-2); font-size: 13px; }
+
+/* ---------- Hermes ---------- */
+.tablet-screen .hermes-panel { display: grid; gap: 14px; width: 100%; }
+.tablet-screen .hermes-intro { gap: 8px; }
+.tablet-screen .tablet-content .hermes-intro .ui-meta { margin: 0; }
+.tablet-screen .tablet-content .hermes-session { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 0; }
+.tablet-screen .tablet-content .hermes-session > span { padding: 3px 10px; border-radius: 999px; background: var(--canvas); color: var(--ink-2); font-size: 12px; font-weight: 600; }
+.tablet-screen .tablet-content .hermes-session code { font-size: 11px; }
+.tablet-screen .hermes-chip-danger { background: var(--danger-bg) !important; color: var(--danger-ink) !important; }
+.tablet-screen .hermes-thread {
+  display: flex; flex-direction: column; gap: 12px; min-height: 220px; max-height: 380px; overflow-y: auto; padding: 16px;
+  border: 1px solid var(--line); border-radius: var(--r-lg); background: color-mix(in srgb, var(--accent-soft) 45%, var(--canvas));
+}
+.tablet-screen .hermes-placeholder { display: grid; gap: 4px; margin: auto; padding: 16px; color: var(--ink-3); font-size: 14px; text-align: center; }
+.tablet-screen .hermes-placeholder strong { color: var(--ink); font-size: 15px; }
+.tablet-screen .tablet-content .hermes-placeholder p { margin: 0; }
+.tablet-screen .hermes-bubble { max-width: min(88%, 620px); padding: 12px 14px; border-radius: 18px; font-size: 14px; }
+.tablet-screen .hermes-bubble.is-hermes { align-self: flex-start; border: 1px solid var(--line); border-bottom-left-radius: 6px; background: var(--surface); color: var(--ink); }
+.tablet-screen .hermes-bubble.is-owner { align-self: flex-end; border-bottom-right-radius: 6px; background: var(--accent-strong); color: #fff; }
+.tablet-screen .hermes-bubble.is-typing { color: var(--ink-3); font-style: italic; }
+.tablet-screen .hermes-bubble-head { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 4px; font-size: 12px; font-weight: 650; opacity: .8; }
+.tablet-screen .hermes-bubble.is-hermes .hermes-bubble-head span { color: var(--accent-ink); }
+.tablet-screen .hermes-bubble-text { margin: 0; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; color: inherit !important; }
+.tablet-screen .hermes-tool { display: grid; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.tablet-screen .hermes-tool-name { color: var(--ink-3); font-size: 12px; font-weight: 600; }
+.tablet-screen .hermes-tool-name code { margin-left: 4px; padding: 1px 6px; border-radius: 6px; background: var(--accent-soft); color: var(--accent-ink); font-size: 12px; }
+.tablet-screen .hermes-steps { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; font-size: 12px; }
+.tablet-screen .hermes-steps li { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--ink-2); }
+.tablet-screen .hermes-steps li.is-completed > span:first-child { color: var(--ok-ink); }
+.tablet-screen .hermes-steps li.is-failed > span:first-child { color: var(--danger-ink); }
+.tablet-screen .tablet-content .hermes-steps .ui-meta { margin: 0; font-size: 12px; }
+.tablet-screen .hermes-composer { display: flex; gap: 10px; align-items: center; padding: 6px 6px 6px 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); }
+.tablet-screen[data-app] .tablet-content .hermes-composer input { min-height: 40px; border: 0 !important; border-radius: 999px; background: transparent !important; box-shadow: none !important; }
+.tablet-screen .hermes-composer:focus-within { border-color: var(--accent-strong); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent); }
+.tablet-screen[data-app] .tablet-content .hermes-composer .primary-button { flex: none; min-height: 40px; }
+
+/* ---------- Komunikasi ---------- */
+.tablet-screen .comm-page { display: grid; gap: 16px; color: var(--ink); }
+.tablet-screen .comm-page .ui-row > p { flex: 1 1 260px; margin: 0; }
+.tablet-screen .comm-page code { padding: 1px 6px; border-radius: 6px; background: var(--canvas); font-size: 12px; }
+.tablet-screen .communications-panel :is(.primary-button, .secondary-button, .text-button) { padding: 0 18px !important; font-size: 13px !important; text-decoration: none; }
+.tablet-screen .comm-qr { display: grid; justify-items: center; gap: 12px; }
+.tablet-screen .comm-qr-code { padding: 12px; border: 1px solid var(--line); border-radius: var(--r-md); background: #fff; }
+.tablet-screen .comm-qr-code svg { display: block; width: min(240px, 60vw); height: auto; }
+.tablet-screen .comm-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px 18px; margin: 0; }
+.tablet-screen .comm-meta dt { color: var(--ink-3); font-size: 12px; font-weight: 600; }
+.tablet-screen .comm-meta dd { margin: 2px 0 0; color: var(--ink); font-size: 13px; overflow-wrap: anywhere; }
+.tablet-screen .comm-manual { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 14px 16px; padding: 16px; border-radius: var(--r-md); background: var(--canvas); }
+.tablet-screen .comm-attempts { display: grid; gap: 6px; padding-top: 10px; border-top: 1px dashed var(--line-strong); }
+.tablet-screen .comm-attempts ul { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: 13px; color: var(--ink-2); }
+.tablet-screen .comm-attempts li { display: flex; flex-wrap: wrap; gap: 0 4px; margin: 0; }
+.tablet-screen .comm-attempts time { margin-left: auto; color: var(--ink-3); }
+
+/* ---------- Kanban & other panels pick up the accent ---------- */
+.tablet-screen[data-app] .tablet-content .kanban-card.selected,
+.tablet-screen[data-app] .tablet-content .kanban-card:hover { border-color: var(--accent); background: var(--accent-soft); }
+.tablet-screen[data-app] .tablet-content .kanban-column h4 { color: var(--ink); }
+.tablet-screen[data-app] .tablet-content :is(.kanban-sync, .kanban-lock-status) { padding: 8px 14px; border-radius: 999px; background: var(--canvas) !important; color: var(--ink-2) !important; font-size: 12px !important; font-weight: 600; }
+.tablet-screen[data-app] .tablet-content :is(.kanban-sync.stale, .kanban-lock-status) { background: var(--warn-bg) !important; color: var(--warn-ink) !important; }
+
+/* Profil usaha */
+.tablet-screen[data-app] .tablet-content .profile-card { gap: 12px; margin: 4px 0 18px; }
+.tablet-screen[data-app] .tablet-content .profile-card > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--ink); font-size: 16px; font-weight: 650; cursor: pointer; list-style: none; }
+.tablet-screen[data-app] .tablet-content .profile-card > summary::-webkit-details-marker { display: none; }
+.tablet-screen[data-app] .tablet-content .profile-card > summary::after { content: "▾"; margin-left: auto; color: var(--ink-3); transition: transform .15s; }
+.tablet-screen[data-app] .tablet-content .profile-card[open] > summary::after { transform: rotate(180deg); }
+.tablet-screen[data-app] .tablet-content .profile-card .ui-meta { margin: 0; }
+.tablet-screen[data-app] .tablet-content .profile-form { margin: 0; padding: 0; border: 0; }
+.tablet-screen .ui-form-group { margin: 6px 0 -4px; color: var(--accent-ink); font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+
+/* Tanda tangan */
+.tablet-screen[data-app] .tablet-content .signature-saved { justify-items: start; margin-bottom: 4px; padding: 18px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); }
+.tablet-screen[data-app] .tablet-content .signature-saved h3 { margin: 0; }
+.tablet-screen[data-app] .tablet-content .signature-saved [role="alert"] { justify-self: stretch; margin: 0; }
+.tablet-screen[data-app] .tablet-content .signature-saved img { border-color: var(--line); border-radius: var(--r-md); }
+.tablet-screen[data-app] .tablet-content .signature-canvas { height: 220px; border: 1px dashed var(--line-strong); border-radius: var(--r-lg); background: #fff; }
+.tablet-screen[data-app] .tablet-content .signature-canvas:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 2px; }
+.tablet-screen[data-app] .tablet-content .signature-actions { justify-content: flex-end; }
+.tablet-screen[data-app] .tablet-content .signature-actions .secondary-button:last-child { background: var(--accent-strong); color: #fff; }
+.tablet-screen[data-app] .tablet-content #signature-help { margin: -4px 0 0; color: var(--ink-3); font-size: 12px; }
+.tablet-screen[data-app] .tablet-content .finance-panel > [role="alert"] + .secondary-button { margin-bottom: 14px; }
+
+@media (max-width: 760px) {
+  .tablet-screen[data-app] .drawer-identity { margin-top: 4px; padding-bottom: 16px; }
+  .tablet-screen[data-app] .drawer-identity > .tablet-app-icon { width: 46px; height: 46px; border-radius: 15px; }
+  .tablet-screen[data-app] .tablet-content :is(.drawer-section, .drawer-section > section, .drawer-section > .finance-panel) > form, .tablet-screen .ui-form { padding: 16px; }
+  .tablet-screen .ui-tabs { border-radius: 18px; }
+  .tablet-screen .ui-tabs-end { margin-left: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tablet-screen * { transition: none !important; }
+}

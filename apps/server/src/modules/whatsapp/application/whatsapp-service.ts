@@ -17,6 +17,53 @@ export class WhatsappService {
     return this.bridgeManager.startPairing();
   }
 
+  public disconnect(): WhatsappPairStatus {
+    return this.bridgeManager.disconnect();
+  }
+
+  public async sendPdf(
+    rawPhone: string,
+    pdfBuffer: Buffer,
+    fileName = 'nota-synectra.pdf',
+    caption = 'Nota Synectra Office'
+  ): Promise<WhatsappSendPdfResponse> {
+    const digits = rawPhone.replace(/\D/g, '');
+    if (!/^0\d{9,14}$/.test(digits) && !/^62\d{9,14}$/.test(digits)) {
+      return { success: false, deliveryStatus: 'failed', error: 'Invalid phone' };
+    }
+    const countryPhone = digits.startsWith('0') ? '62' + digits.slice(1) : digits;
+    const chatId = `${countryPhone}@s.whatsapp.net`;
+
+    const tmpDir = path.resolve('apps/server/.tmp');
+    fs.mkdirSync(tmpDir, { recursive: true });
+    const tempFile = path.join(tmpDir, `nota-${Date.now()}-${Math.random().toString(36).slice(2)}.pdf`);
+    fs.writeFileSync(tempFile, pdfBuffer);
+
+    try {
+      const res = await this.bridgeManager.sendMedia(
+        chatId,
+        tempFile,
+        fileName,
+        caption
+      );
+      return {
+        success: true,
+        deliveryStatus: 'sent',
+        messageId: res.messageId,
+        fileName,
+        mimeType: PDF_MIME_TYPE
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        deliveryStatus: 'unknown',
+        error: err instanceof Error ? err.message : 'WhatsApp send outcome unknown'
+      };
+    } finally {
+      fs.unlink(tempFile, () => undefined);
+    }
+  }
+
   public async sendSyntheticPdf(rawPhone = '082165443677'): Promise<WhatsappSendPdfResponse> {
     const digits = rawPhone.replace(/\D/g, '');
     if (!/^0\d{9,14}$/.test(digits)) {

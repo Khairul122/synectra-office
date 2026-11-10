@@ -17,21 +17,104 @@ export class BridgeManager {
   private pairProcess?: ChildProcess;
   private serverProcess?: ChildProcess;
 
-  constructor(opts?: { bridgeScript?: string; sessionDir?: string; port?: number }) {
+  constructor(opts?: { bridgeScript?: string; sessionDir?: string; port?: number; autoStart?: boolean }) {
     this.bridgeScript = opts?.bridgeScript || process.env.WHATSAPP_BRIDGE_SCRIPT || 'C:/Users/khair/AppData/Local/hermes/hermes-agent/scripts/whatsapp-bridge/bridge.js';
     this.sessionDir = opts?.sessionDir || process.env.WHATSAPP_SESSION_DIR || path.resolve(process.cwd(), 'session/whatsapp');
     this.port = opts?.port || Number(process.env.WHATSAPP_BRIDGE_PORT || 3001);
 
-    this.checkInitialState();
+    this.checkInitialState(opts?.autoStart !== false);
   }
 
-  private checkInitialState() {
+  public validateAuthState(): { valid: boolean; error?: string } {
+    if (!fs.existsSync(this.sessionDir)) {
+      return { valid: false, error: 'pairing_required: session directory not found' };
+    }
+
     const credsFile = path.join(this.sessionDir, 'creds.json');
-    if (fs.existsSync(credsFile)) {
-      this.currentStatus = 'connecting';
-      this.startServerProcess();
-    } else {
+    if (!fs.existsSync(credsFile)) {
+      return { valid: false, error: 'pairing_required: credentials not found' };
+    }
+
+    try {
+      const credsStat = fs.statSync(credsFile);
+      if (credsStat.size === 0) {
+        return { valid: false, error: 'pairing_required: creds.json is empty' };
+      }
+      const credsRaw = fs.readFileSync(credsFile, 'utf8');
+      const credsJson = JSON.parse(credsRaw);
+      if (!credsJson || typeof credsJson !== 'object') {
+        return { valid: false, error: 'pairing_required: creds.json is not a valid JSON object' };
+      }
+    } catch {
+      return { valid: false, error: 'pairing_required: creds.json corrupted' };
+    }
+
+    try {
+      const files = fs.readdirSync(this.sessionDir);
+      for (const file of files) {
+        if (!file.endsWith('.json') || file === 'creds.json') continue;
+        const filePath = path.join(this.sessionDir, file);
+        const stat = fs.statSync(filePath);
+        if (stat.size === 0) {
+          return { valid: false, error: `pairing_required: signal key file ${file} is empty` };
+        }
+        const raw = fs.readFileSync(filePath, 'utf8');
+        JSON.parse(raw);
+      }
+    } catch {
+      return { valid: false, error: 'pairing_required: signal keys corrupted' };
+    }
+
+    return { valid: true };
+  }
+
+  public checkInitialState(startServer = true): WhatsappConnectionStatus {
+    const integrity = this.validateAuthState();
+    if (!integrity.valid) {
       this.currentStatus = 'unpaired';
+      this.errorMessage = integrity.error;
+      return this.currentStatus;
+    }
+
+    this.currentStatus = 'connecting';
+    this.errorMessage = undefined;
+    if (startServer) {
+      this.startServerProcess();
+    }
+    return this.currentStatus;
+  }
+
+  public backupSession(backupDir: string): void {
+    if (!fs.existsSync(this.sessionDir)) return;
+    fs.mkdirSync(backupDir, { recursive: true });
+    const files = fs.readdirSync(this.sessionDir);
+    for (const file of files) {
+      const src = path.join(this.sessionDir, file);
+      const dest = path.join(backupDir, file);
+      if (fs.statSync(src).isFile()) {
+        fs.copyFileSync(src, dest);
+      }
+    }
+  }
+
+  public restoreSession(backupDir: string): void {
+    if (!fs.existsSync(backupDir)) return;
+    fs.mkdirSync(this.sessionDir, { recursive: true });
+    const files = fs.readdirSync(backupDir);
+    for (const file of files) {
+      const src = path.join(backupDir, file);
+      const dest = path.join(this.sessionDir, file);
+      if (fs.statSync(src).isFile()) {
+        fs.copyFileSync(src, dest);
+      }
+    }
+  }
+
+  public clearSession(): void {
+    if (!fs.existsSync(this.sessionDir)) return;
+    const files = fs.readdirSync(this.sessionDir);
+    for (const file of files) {
+      fs.unlinkSync(path.join(this.sessionDir, file));
     }
   }
 
@@ -247,6 +330,15 @@ export class BridgeManager {
     }
 
     return data as { success: boolean; messageId: string };
+  }
+
+  public disconnect(): WhatsappPairStatus {
+    this.stop();
+    this.currentStatus = 'unpaired';
+    this.qrCode = undefined;
+    this.user = undefined;
+    this.errorMessage = undefined;
+    return this.getStatus();
   }
 
   public stop() {

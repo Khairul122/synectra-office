@@ -1,1 +1,22 @@
-{"name":"synectra-office","private":true,"packageManager":"pnpm@12.9.1","engines":{"node":"24.19.0"},"scripts":{"dev":"concurrently -k -n server,web \"pnpm --filter @synectra/server dev\" \"pnpm --filter @synectra/web dev\"","build":"pnpm -r build","typecheck":"pnpm -r typecheck","architecture":"depcruise apps packages --config .dependency-cruiser.cjs","test":"pnpm --filter @synectra/server test"},"devDependencies":{"concurrently":"10.0.6","dependency-cruiser":"18.7.2","typescript":"5.9.3"}}
+{
+  "name": "synectra-office",
+  "private": true,
+  "packageManager": "pnpm@12.9.1",
+  "engines": {
+    "node": "24.19.0"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n server,web \"pnpm --filter @synectra/server dev\" \"pnpm --filter @synectra/web dev\"",
+    "start": "pnpm dev",
+    "stop": "powershell -NoProfile -Command \"try { Get-NetTCPConnection -LocalPort 3000,5173 -State Listen -ErrorAction Stop | Where-Object { $_.OwningProcess -gt 4 } | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue } } catch {}; exit 0\"",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "architecture": "depcruise apps packages --config .dependency-cruiser.cjs",
+    "test": "pnpm -r --if-present test"
+  },
+  "devDependencies": {
+    "concurrently": "10.0.6",
+    "dependency-cruiser": "18.7.2",
+    "typescript": "5.9.3"
+  }
+}
