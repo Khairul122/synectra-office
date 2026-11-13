@@ -41,6 +41,18 @@ export async function saveProfile(ownerId: string, input: unknown) {
   else data(ownerId).profile = profile;
   return profile;
 }
+/** Owner yang mendaftarkan nomor WA ini di profil usaha (bisa >1 bila nomor didaftarkan ganda). */
+export async function findOwnersByWhatsapp(phone: string): Promise<string[]> {
+  if (!useFirestore) return [...owners].filter(([, value]) => value.profile?.ownerWhatsapp === phone).map(([id]) => id);
+  const snapshot = await getAppFirestore().collection('owners').where('profile.ownerWhatsapp', '==', phone).limit(2).get();
+  return snapshot.docs.map(doc => doc.id);
+}
+/** Semua owner yang sudah mendaftarkan No. WA owner (untuk laporan pagi & alert). */
+export async function listOwnerWhatsapps(): Promise<Array<{ ownerId: string; phone: string }>> {
+  if (!useFirestore) return [...owners].flatMap(([ownerId, value]) => value.profile?.ownerWhatsapp ? [{ ownerId, phone: value.profile.ownerWhatsapp }] : []);
+  const snapshot = await getAppFirestore().collection('owners').where('profile.ownerWhatsapp', '>', '').get();
+  return snapshot.docs.map(doc => ({ ownerId: doc.id, phone: String(doc.get('profile.ownerWhatsapp')) }));
+}
 export async function listCategories(ownerId: string) {
   if (!useFirestore) return data(ownerId).categories;
   const snapshot = await ownerDoc(ownerId).collection('categories').get();

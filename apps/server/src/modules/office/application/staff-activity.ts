@@ -1,3 +1,4 @@
+import { getAppFirestore } from '../../../infrastructure/firestore';
 import type { OfficeStaffId as StaffId, OfficeStaffSnapshot as StaffSnapshot } from '@synectra/contracts';
 type OwnerActivity = { revision: number; tasks: Record<StaffId, Map<symbol, string>>; listeners: Set<(snapshot: StaffSnapshot) => void> };
 
@@ -49,10 +50,17 @@ export function beginStaffActivity(ownerId: string, id: StaffId, activity: strin
 }
 
 export type StaffWorkRecord = { staff: StaffId; activity: string; startedAt: string; durationMs: number };
-// ponytail: log kerja di memori (maks 500/owner), hilang saat server restart; pindahkan ke Firestore bila evaluasi butuh riwayat lintas restart.
+const useFirestore = process.env.FIREBASE_USE_FIRESTORE === 'true';
+// Mode memori (dev/test): maks 500/owner, hilang saat restart. Mode Firestore: owners/{id}/staff_work, tahan restart.
 const workLogs = new Map<string, StaffWorkRecord[]>();
+const workCollection = (ownerId: string) => getAppFirestore().collection('owners').doc(ownerId).collection('staff_work');
 
 function recordWork(ownerId: string, record: StaffWorkRecord) {
+  if (useFirestore) {
+    // Log kerja tidak boleh menggagalkan operasi bisnis yang sudah selesai.
+    workCollection(ownerId).add(record).catch(error => console.error('[staff-work] gagal menyimpan log:', error instanceof Error ? error.message : error));
+    return;
+  }
   const log = workLogs.get(ownerId) ?? [];
   log.push(record);
   if (log.length > 500) log.shift();
@@ -60,8 +68,13 @@ function recordWork(ownerId: string, record: StaffWorkRecord) {
 }
 
 /** Operasi nyata yang sudah selesai sejak `sinceMs` (epoch), urut lama -> baru. */
-export function listStaffWork(ownerId: string, sinceMs = 0): StaffWorkRecord[] {
-  return (workLogs.get(ownerId) ?? []).filter(record => Date.parse(record.startedAt) >= sinceMs);
+export async function listStaffWork(ownerId: string, sinceMs = 0): Promise<StaffWorkRecord[]> {
+  const since = new Date(sinceMs).toISOString();
+  if (useFirestore) {
+    const snapshot = await workCollection(ownerId).where('startedAt', '>=', since).orderBy('startedAt').limit(2000).get();
+    return snapshot.docs.map(doc => doc.data() as StaffWorkRecord);
+  }
+  return (workLogs.get(ownerId) ?? []).filter(record => record.startedAt >= since);
 }
 
 export function subscribeStaffActivity(ownerId: string, listener: (snapshot: StaffSnapshot) => void): () => void {

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { OFFICE_STAFF_SKILLS, type OfficeStaffId } from '@synectra/contracts';
 import type { ActorId, ActorUiState } from './scene-manager-3d';
 import type { Icon as IntentIcon, Mood, NeedId } from './world/staff-brain';
 
@@ -82,6 +83,7 @@ export function SimPanel({ id, index, name, role, portrait, state, realStatus, w
     {id !== 'reception' && state && <div className="sim-needs" aria-label="Kebutuhan karakter (simulasi)">
       {NEEDS.map(([need, label]) => { const value = Math.round(state.needs[need]); return <div key={need} className="sim-need"><span>{label}</span><meter min={0} max={100} low={30} high={65} optimum={100} value={value} aria-label={`${label} ${value}%`} /></div>; })}
     </div>}
+    {id in OFFICE_STAFF_SKILLS && <ul className="sim-skills" aria-label={`Keahlian ${name}`}>{OFFICE_STAFF_SKILLS[id as OfficeStaffId].map(skill => <li key={skill}>{skill}</li>)}</ul>}
     <p className="sim-real" role="status">{realStatus}{lastEvent ? ` · Terakhir: ${lastEvent}` : ''}</p>
     {children}
     <div className="sim-buttons">

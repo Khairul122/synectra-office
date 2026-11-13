@@ -1,3 +1,4 @@
+import { OFFICE_STAFF_SKILLS } from '@synectra/contracts';
 import { HERMES_PROFILE, hermesTenantFor, stripAnsi, type HermesCliRunner } from '../../../infrastructure/hermes-cli';
 import { listClients } from '../../business/application/business-service';
 import { listInvoices } from '../../invoice/application/invoice-service';
@@ -34,12 +35,13 @@ function countBy<T>(items: T[], key: (item: T) => string): string {
 /** Ringkasan data nyata kantor (tanpa simulasi) yang dilampirkan ke setiap pertanyaan untuk agen Hermes. */
 export async function buildOfficeData(ownerId: string, now = new Date()): Promise<string> {
   const since = now.getTime() - 24 * 60 * 60 * 1000;
-  const [clients, invoices, payments, receipts, runs] = await Promise.all([
+  const [clients, invoices, payments, receipts, runs, work] = await Promise.all([
     listClients(ownerId),
     listInvoices(ownerId),
     listPayments(ownerId),
     listReceiptJobs(ownerId),
-    getCalendarStore().listRuns(ownerId, undefined, 100)
+    getCalendarStore().listRuns(ownerId, undefined, 100),
+    listStaffWork(ownerId, since)
   ]);
   const verified = payments.filter(payment => payment.status === 'verified');
   const paidAt = (payment: (typeof payments)[number]) => payment.paymentDate ?? payment.verifiedAt ?? payment.createdAt;
@@ -48,25 +50,27 @@ export async function buildOfficeData(ownerId: string, now = new Date()): Promis
   const billed = invoices.filter(invoice => invoice.status === 'issued' || invoice.status === 'paid').reduce((total, invoice) => total + invoice.total, 0);
 
   const snapshot = getStaffSnapshot(ownerId);
-  const work = listStaffWork(ownerId, since);
   const recentReceipts = receipts.filter(job => Date.parse(job.updatedAt) >= since);
   const recentRuns = runs.filter(run => Date.parse(run.startedAt) >= since);
+  const finished = recentReceipts.filter(job => job.status !== 'queued' && job.status !== 'processing');
+  const failRate = finished.length ? `${Math.round(finished.filter(job => job.status !== 'submitted').length / finished.length * 100)}% gagal/tidak pasti dari ${finished.length} pengiriman selesai` : 'belum ada pengiriman selesai';
   const failures = recentReceipts.filter(job => job.status === 'failed' && job.error).slice(-5).map(job => job.error);
 
   const staffLines = (Object.keys(STAFF_LABEL) as Array<keyof typeof STAFF_LABEL>).map(id => {
     const own = work.filter(record => record.staff === id);
     const seconds = Math.round(own.reduce((total, record) => total + record.durationMs, 0) / 1000);
+    const average = own.length ? ` rata-rata ${(seconds / own.length).toFixed(1)} detik/operasi;` : '';
     const current = snapshot.staff[id];
-    return `- ${STAFF_LABEL[id]}: status sekarang ${current.active ? `BEKERJA (${current.activity})` : 'IDLE'}; 24 jam terakhir ${own.length} operasi selesai, total ${seconds} detik kerja${own.length ? ` (${countBy(own, record => record.activity)})` : ''}.`;
+    return `- ${STAFF_LABEL[id]}: status sekarang ${current.active ? `BEKERJA (${current.activity})` : 'IDLE'}; 24 jam terakhir ${own.length} operasi selesai, total ${seconds} detik kerja;${average}${own.length ? ` (${countBy(own, record => record.activity)})` : ''}. Keahlian: ${OFFICE_STAFF_SKILLS[id].join('; ')}.`;
   });
 
   return [
     `Data nyata kantor Synectra per ${wib(now)} WIB (sumber: database aplikasi, bukan simulasi).`,
     `Keuangan: pendapatan terverifikasi total ${rupiah(sum(verified))} dari ${verified.length} pembayaran; hari ini ${rupiah(sum(verified.filter(p => wibDay(paidAt(p)) === today)))}; bulan ini ${rupiah(sum(verified.filter(p => wibDay(paidAt(p)).slice(0, 7) === today.slice(0, 7))))}. Total ditagihkan ${rupiah(billed)}; piutang ${rupiah(Math.max(billed - sum(verified), 0))}. Pembayaran menurut status: ${countBy(payments, p => p.status)}.`,
     `Nota: ${invoices.length} total (${countBy(invoices, invoice => invoice.status)}). Klien terdaftar: ${clients.length}.`,
-    `Pengiriman nota WhatsApp: semua ${countBy(receipts, job => job.status)}; 24 jam terakhir ${countBy(recentReceipts, job => job.status)}.${failures.length ? ` Error terakhir: ${failures.join(' | ').slice(0, 400)}` : ''}`,
+    `Pengiriman nota WhatsApp: semua ${countBy(receipts, job => job.status)}; 24 jam terakhir ${countBy(recentReceipts, job => job.status)} (${failRate}).${failures.length ? ` Error terakhir: ${failures.join(' | ').slice(0, 400)}` : ''}`,
     `Jadwal otomatis 24 jam terakhir: ${recentRuns.length} eksekusi (${countBy(recentRuns, run => `${run.actor}/${run.status}`)}).`,
-    'Karyawan (log operasi dicatat sejak server terakhir dinyalakan):',
+    `Karyawan (log operasi ${process.env.FIREBASE_USE_FIRESTORE === 'true' ? 'tersimpan di database' : 'dicatat sejak server terakhir dinyalakan'}):`,
     ...staffLines
   ].join('\n');
 }

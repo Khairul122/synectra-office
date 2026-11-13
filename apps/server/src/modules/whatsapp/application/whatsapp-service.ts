@@ -21,6 +21,14 @@ export class WhatsappService {
     return this.bridgeManager.disconnect();
   }
 
+  public pollIncoming() {
+    return this.bridgeManager.pollMessages();
+  }
+
+  public sendText(chatId: string, message: string) {
+    return this.bridgeManager.sendText(chatId, message);
+  }
+
   public async sendPdf(
     rawPhone: string,
     pdfBuffer: Buffer,

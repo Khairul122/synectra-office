@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import type { BusinessProfile } from '@synectra/contracts';
 
-const TEXT_FIELDS = ['businessName', 'signerName', 'address', 'phone', 'email', 'npwp', 'bankName', 'bankAccountNumber', 'bankAccountName', 'invoiceNotes'] as const;
+const TEXT_FIELDS = ['businessName', 'signerName', 'address', 'phone', 'email', 'npwp', 'bankName', 'bankAccountNumber', 'bankAccountName', 'invoiceNotes', 'ownerWhatsapp'] as const;
 type Form = Record<(typeof TEXT_FIELDS)[number], string>;
 
 const emptyForm = Object.fromEntries(TEXT_FIELDS.map((key) => [key, ''])) as Form;
@@ -44,7 +44,7 @@ export function BusinessProfilePanel({ csrfToken }: { csrfToken: string | null }
         headers: { 'Content-Type': 'application/json', ...(csrfToken ? { 'x-csrf-token': csrfToken } : {}) },
         body: JSON.stringify({ ...saved, ...form })
       });
-      if (!response.ok) throw new Error('Periksa kembali isian: nomor rekening hanya angka, NPWP 15–16 digit, email harus valid.');
+      if (!response.ok) throw new Error('Periksa kembali isian: nomor rekening hanya angka, NPWP 15–16 digit, email harus valid, No. WA owner format 628….');
       const { profile } = await response.json() as { profile: BusinessProfile };
       setSaved(profile); setForm(toForm(profile));
       setMessage('Profil tersimpan. Nota PDF berikutnya memakai data ini.');
@@ -78,6 +78,10 @@ export function BusinessProfilePanel({ csrfToken }: { csrfToken: string | null }
       <label>Nomor rekening<input maxLength={40} inputMode="numeric" value={form.bankAccountNumber} onChange={set('bankAccountNumber')} /></label>
       <label>Atas nama<input maxLength={120} value={form.bankAccountName} onChange={set('bankAccountName')} /></label>
       <label className="ui-span-all">Catatan di nota (opsional)<textarea maxLength={500} rows={2} value={form.invoiceNotes} onChange={set('invoiceNotes')} placeholder="cth: Denda 2% per bulan untuk keterlambatan pembayaran." /></label>
+
+      <h4 className="ui-span-all ui-form-group">WhatsApp owner</h4>
+      <label className="ui-span-all">No. WA owner<input maxLength={16} inputMode="tel" pattern="628[0-9]{8,13}" value={form.ownerWhatsapp} onChange={set('ownerWhatsapp')} placeholder="6281…" aria-describedby="owner-wa-hint" /></label>
+      <p id="owner-wa-hint" className="ui-meta ui-span-all">Kirim pesan <strong>list kerjaan</strong> dari nomor ini ke WhatsApp kantor untuk menerima status pesanan dan todo list.</p>
 
       {error && <p role="alert" className="ui-toast">{error}</p>}
       {message && <p role="status" className="ui-toast">{message}</p>}

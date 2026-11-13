@@ -332,6 +332,26 @@ export class BridgeManager {
     return data as { success: boolean; messageId: string };
   }
 
+  /** Ambil (dan kosongkan) antrean pesan masuk bridge. */
+  public async pollMessages(): Promise<Array<{ chatId?: string; senderId?: string; body?: string }>> {
+    if (this.currentStatus !== 'connected') return [];
+    const res = await fetch(`http://127.0.0.1:${this.port}/messages`, { signal: AbortSignal.timeout(5000) });
+    return res.ok ? ((await res.json()) as Array<{ chatId?: string; senderId?: string; body?: string }>) : [];
+  }
+
+  public async sendText(chatId: string, message: string) {
+    if (this.currentStatus !== 'connected') throw new Error('WhatsApp bridge not connected');
+    const res = await fetch(`http://127.0.0.1:${this.port}/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chatId, message }),
+      signal: AbortSignal.timeout(15000)
+    });
+    const data = (await res.json()) as any;
+    if (!res.ok || !data.success) throw new Error(data.error || `Send failed with status ${res.status}`);
+    return data as { success: boolean; messageId: string };
+  }
+
   public disconnect(): WhatsappPairStatus {
     this.stop();
     this.currentStatus = 'unpaired';

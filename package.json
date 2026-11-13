@@ -12,7 +12,8 @@
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "architecture": "depcruise apps packages --config .dependency-cruiser.cjs",
-    "test": "pnpm -r --if-present test"
+    "test": "pnpm -r --if-present test",
+    "hermes:skills": "node scripts/install-hermes-skills.mjs"
   },
   "devDependencies": {
     "concurrently": "10.0.6",

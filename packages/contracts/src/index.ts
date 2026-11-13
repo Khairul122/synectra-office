@@ -35,7 +35,9 @@ export const businessProfileSchema = z.object({
   bankName: optionalText(80),
   bankAccountNumber: optionalText(40, /^[0-9][0-9\- ]{3,39}$/),
   bankAccountName: optionalText(120),
-  invoiceNotes: optionalText(500)
+  invoiceNotes: optionalText(500),
+  // Nomor WA pemilik yang boleh memerintah bot, mis. "list kerjaan".
+  ownerWhatsapp: optionalText(16, /^628\d{8,13}$/)
 });
 export type BusinessProfile = z.infer<typeof businessProfileSchema>;
 export const serviceCategorySchema = z.object({ id: z.string().min(1), name: z.string().trim().min(1).max(80) });
@@ -146,6 +148,12 @@ export type DeliveryAttempt = z.infer<typeof deliveryAttemptSchema>;
 // Office status & business event contracts
 export const officeStaffIdSchema = z.enum(['hermes', 'admin', 'communication']);
 export type OfficeStaffId = z.infer<typeof officeStaffIdSchema>;
+/** Keahlian nyata tiap karyawan = operasi yang benar-benar dijalankan server. Dipakai panel UI dan konteks Lead Hermes. */
+export const OFFICE_STAFF_SKILLS: Record<OfficeStaffId, readonly string[]> = {
+  hermes: ['Orkestrasi & delegasi tugas Kanban', 'Chat analisis data kantor', 'Evaluasi kinerja harian', 'Menyusun laporan "list kerjaan" untuk owner'],
+  admin: ['Membuat & menerbitkan nota', 'Membuat PDF nota', 'Mencatat & memverifikasi pembayaran'],
+  communication: ['Koneksi & pairing WhatsApp', 'Mengirim nota/kuitansi ke klien', 'Mengirim laporan kerja ke WA owner', 'Memantau status terkirim/dibaca']
+};
 export const officeStaffActivitySchema = z.discriminatedUnion('active', [
   z.object({ active: z.literal(true), activity: z.string().min(1) }),
   z.object({ active: z.literal(false), activity: z.null() })
