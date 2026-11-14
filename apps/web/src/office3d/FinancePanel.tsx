@@ -5,9 +5,10 @@ type PaymentKind = NonNullable<Payment['kind']>;
 const kinds: Record<PaymentKind, string> = { dp: 'DP', termin_1: 'Termin 1', termin_2: 'Termin 2', settlement: 'Pelunasan' };
 const methods: Record<Payment['method'], string> = { transfer: 'Transfer', cash: 'Tunai', card: 'Kartu', other: 'Lainnya' };
 const money = (amount: number) => `Rp${amount.toLocaleString('id-ID')}`;
+const progressDate = (iso: string) => new Date(iso).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'medium', timeStyle: 'short' });
 const today = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Jakarta' }).format(new Date());
 
-export function FinancePanel({ mode, csrfToken, onChanged }: { mode: 'dashboard' | 'payments'; csrfToken: string | null; onChanged: () => void }) {
+export function FinancePanel({ mode, csrfToken, onChanged }: { mode: 'dashboard' | 'payments' | 'progress'; csrfToken: string | null; onChanged: () => void }) {
   const [data, setData] = useState<FinanceData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -23,6 +24,8 @@ export function FinancePanel({ mode, csrfToken, onChanged }: { mode: 'dashboard'
   const [method, setMethod] = useState<Payment['method']>('transfer');
   const [reference, setReference] = useState('');
   const [paymentDate, setPaymentDate] = useState(today);
+  const [progressQuery, setProgressQuery] = useState('');
+  const [progressSelectedId, setProgressSelectedId] = useState<string | null>(null);
   const invoiceKey = useRef<{ payload: string; key: string } | null>(null);
   const paymentKey = useRef<{ payload: string; key: string } | null>(null);
   const requestId = useRef(0);
@@ -64,6 +67,19 @@ export function FinancePanel({ mode, csrfToken, onChanged }: { mode: 'dashboard'
       setNotice(`Tagihan ${result.invoice.number} dibuat. Tambahkan pembayaran di bawah.`);
       await refresh(); onChanged();
     } catch (err) { setError(err instanceof Error ? err.message : 'Tagihan gagal dibuat'); }
+    finally { setBusy(false); }
+  };
+  const saveProgress = async (event: FormEvent<HTMLFormElement>, invoice: Invoice) => {
+    event.preventDefault(); if (busy) return;
+    const formEl = event.currentTarget;
+    const form = new FormData(formEl);
+    setBusy(true); setError(''); setNotice('');
+    try {
+      const result = await submit(`/api/invoices/${invoice.id}/progress`, { method: 'POST', headers, body: JSON.stringify({ note: String(form.get('note') ?? ''), notifyClient: form.get('notifyClient') === 'on' }) }) as { client: { status: 'sent' | 'skipped' | 'failed'; reason?: string } };
+      formEl.reset();
+      const sent = result.client.status === 'sent' ? ' dan terkirim ke WA klien' : result.client.status === 'skipped' ? `, tidak dikirim ke klien${result.client.reason ? ` (${result.client.reason})` : ''}` : `, tetapi GAGAL dikirim ke WA klien${result.client.reason ? ` (${result.client.reason})` : ''}`;
+      setNotice(`Progres ${invoice.number} tersimpan${sent}.`); await refresh(); onChanged();
+    } catch (err) { setError(err instanceof Error ? err.message : 'Progres gagal disimpan'); }
     finally { setBusy(false); }
   };
   const clearPayment = () => { setEditing(null); setAmount(''); setReference(''); setKind('dp'); setMethod('transfer'); setPaymentDate(today()); paymentKey.current = null; };
@@ -108,7 +124,7 @@ export function FinancePanel({ mode, csrfToken, onChanged }: { mode: 'dashboard'
     setEditing(payment); setInvoiceId(payment.invoiceId); setKind(payment.kind ?? 'dp'); setAmount(String(payment.amount)); setMethod(payment.method); setReference(payment.reference); setPaymentDate(payment.paymentDate ?? payment.createdAt.slice(0, 10)); setNotice(''); setError('');
   };
   if (!data) return <section className="finance-panel" aria-labelledby={`finance-${mode}`}>
-    <h2 id={`finance-${mode}`}>{mode === 'dashboard' ? 'Dashboard keuangan' : 'Pembayaran'}</h2>
+    <h2 id={`finance-${mode}`}>{mode === 'dashboard' ? 'Dashboard keuangan' : mode === 'progress' ? 'Progres pesanan' : 'Pembayaran'}</h2>
     {loading && <p role="status">Memuat data…</p>}
     {error && <><p role="alert">{error}</p><button type="button" className="secondary-button" onClick={() => { setLoading(true); void refresh(); }}>Coba lagi</button></>}
   </section>;
@@ -120,14 +136,56 @@ export function FinancePanel({ mode, csrfToken, onChanged }: { mode: 'dashboard'
   const selected = rows.find(row => row.invoice.id === invoiceId);
   const visiblePayments = data.payments.filter(payment => payment.status !== 'reversed');
   return <section className="finance-panel" aria-labelledby={`finance-${mode}`}>
-    <h2 id={`finance-${mode}`}>{mode === 'dashboard' ? 'Dashboard keuangan' : 'Pembayaran'}</h2>
+    <h2 id={`finance-${mode}`}>{mode === 'dashboard' ? 'Dashboard keuangan' : mode === 'progress' ? 'Progres pesanan' : 'Pembayaran'}</h2>
     {loading && <p role="status">Memuat data…</p>}
     {error && <p className="ui-toast" role="alert">{error} Data terakhir ditampilkan.</p>}
     {notice && <p className="ui-toast" role="status">{notice}</p>}
-    {mode === 'dashboard' ? <>
+    {mode === 'progress' ? (() => {
+      // Pesanan lunas tidak ditampilkan; halaman ini untuk pesanan yang masih berjalan/ditagih.
+      const unpaid = rows.filter(row => row.remaining > 0);
+      const detail = unpaid.find(row => row.invoice.id === progressSelectedId);
+      if (detail) {
+        const { invoice, client, remaining } = detail;
+        const latest = invoice.progress?.at(-1);
+        return <div className="progress-detail">
+          <button type="button" className="text-button progress-back" onClick={() => setProgressSelectedId(null)}>← Kembali ke daftar</button>
+          <h3>{client?.name ?? 'Klien tidak tersedia'} · {invoice.number}</h3>
+          <p>{invoice.items.map(item => item.description).join(', ')} · Total {money(invoice.total)} · Sisa {money(remaining)}</p>
+          <div className="order-progress"><span>Progres terakhir: <strong>{latest ? `update ${progressDate(latest.at)}` : 'belum diisi'}</strong></span>{latest?.note && <span>{latest.note}</span>}</div>
+          <form key={`${invoice.id}-${invoice.progress?.length ?? 0}`} onSubmit={event => saveProgress(event, invoice)} className="finance-form progress-form">
+            <label>Catatan progres<textarea name="note" required maxLength={300} rows={4} placeholder="cth: desain disetujui klien, lanjut cetak besok" /></label>
+            <label className="order-progress-notify"><input name="notifyClient" type="checkbox" defaultChecked={client?.communicationPreference !== 'email'} /><span><strong>Kirim ke WA klien</strong><small>Bila dicentang, klien menerima pesan WhatsApp berisi catatan ini.{client?.communicationPreference === 'email' ? ' Klien ini memilih email, jadi defaultnya tidak dikirim.' : ''}</small></span></label>
+            <button type="submit" disabled={busy}>{busy ? 'Menyimpan…' : 'Simpan progres'}</button>
+          </form>
+          <h4>Riwayat progres</h4>
+          {invoice.progress?.length ? <ul className="progress-history">{[...invoice.progress].reverse().map(entry => <li key={entry.at}>
+            <time dateTime={entry.at}>{progressDate(entry.at)}</time>
+            <p className={entry.note ? '' : 'is-empty'}>{entry.note || 'Tanpa catatan'}</p>
+            {entry.clientNotice && <span className={`progress-history-notice is-${entry.clientNotice.status}`}>{entry.clientNotice.status === 'sent' ? 'Terkirim ke WA klien' : entry.clientNotice.status === 'skipped' ? 'Tidak dikirim ke klien' : 'Gagal dikirim ke WA klien'}{entry.clientNotice.reason ? ` — ${entry.clientNotice.reason}` : ''}</span>}
+          </li>)}</ul> : <p>Belum ada riwayat.</p>}
+        </div>;
+      }
+      const query = progressQuery.trim().toLowerCase();
+      const shown = unpaid.filter(({ invoice, client }) => (!query || `${invoice.number ?? ''} ${client?.name ?? ''} ${invoice.items.map(item => item.description).join(' ')}`.toLowerCase().includes(query)));
+      return <>
+        <p>Pilih pesanan untuk mengisi progres. Pesanan yang sudah lunas tidak ditampilkan.</p>
+        <div className="progress-toolbar">
+          <label>Cari pesanan<input type="search" value={progressQuery} onChange={event => setProgressQuery(event.target.value)} placeholder="No. nota, klien, atau proyek" /></label>
+        </div>
+        {shown.length ? <ul className="progress-list">{shown.map(({ invoice, client }) => { const latest = invoice.progress?.at(-1); return <li key={invoice.id}>
+          <button type="button" className="progress-item" onClick={() => setProgressSelectedId(invoice.id)}>
+            <span className="progress-item-head"><strong>{client?.name ?? 'Klien tidak tersedia'}</strong><span>{invoice.number}</span></span>
+            <span className="progress-item-project">{invoice.items.map(item => item.description).join(', ')}</span>
+            <span className="progress-item-meta">{latest ? `Update ${progressDate(latest.at)}${latest.note ? ` — ${latest.note}` : ''}` : 'Progres belum diisi'}</span>
+          </button>
+        </li>; })}</ul> : <p>{unpaid.length ? 'Tidak ada pesanan yang cocok.' : 'Tidak ada pesanan belum lunas.'}</p>}
+      </>;
+    })() : mode === 'dashboard' ? <>
       <div className="finance-stats"><div><span>Klien</span><strong>{data.clients.length}</strong></div><div><span>Total tagihan</span><strong>{money(rows.reduce((sum, row) => sum + row.invoice.total, 0))}</strong></div><div><span>Sudah dibayar</span><strong>{money(rows.reduce((sum, row) => sum + row.paid, 0))}</strong></div><div><span>Sisa tagihan</span><strong>{money(rows.reduce((sum, row) => sum + row.remaining, 0))}</strong></div></div>
       <h3>Ringkasan tagihan</h3>
-      {rows.length ? <ul className="finance-list">{rows.map(({ invoice, client, paid, remaining }) => <li key={invoice.id}><strong>{client?.name ?? 'Klien tidak tersedia'} · {invoice.number}</strong><span>{invoice.items.map(item => item.description).join(', ')}</span><span>{money(invoice.total)} · Dibayar {money(paid)} · Sisa {money(remaining)}</span><span>{remaining === 0 ? 'Lunas' : 'Belum lunas'}</span></li>)}</ul> : <p>Belum ada tagihan terbit.</p>}
+      {rows.length ? <ul className="finance-list">{rows.map(({ invoice, client, paid, remaining }) => { const latest = invoice.progress?.at(-1); return <li key={invoice.id}><strong>{client?.name ?? 'Klien tidak tersedia'} · {invoice.number}</strong><span>{invoice.items.map(item => item.description).join(', ')}</span><span>{money(invoice.total)} · Dibayar {money(paid)} · Sisa {money(remaining)}</span><span>{remaining === 0 ? 'Lunas' : 'Belum lunas'}</span>
+        <div className="order-progress"><span>Progres pengerjaan: <strong>{latest ? `update ${progressDate(latest.at)}` : 'belum diisi'}</strong></span>{latest?.note && <span>{latest.note}</span>}</div>
+        </li>; })}</ul> : <p>Belum ada tagihan terbit.</p>}
     </> : <>
       <h3>Buat tagihan</h3>
       <p>Isi klien, nama proyek, dan total tagihan. Nomor nota dibuat otomatis.</p>

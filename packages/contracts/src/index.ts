@@ -50,7 +50,14 @@ export type ClientInput = z.input<typeof clientInputSchema>;
 export const invoiceItemSchema = z.object({ description: z.string().trim().min(1).max(200), quantity: z.number().int().positive(), unitPrice: z.number().int().nonnegative() });
 export const invoiceInputSchema = z.object({ clientId: z.string().min(1), items: z.array(invoiceItemSchema).min(1).max(100) });
 export const invoiceStatusSchema = z.enum(['draft', 'issued', 'paid', 'cancelled']);
-export const invoiceSchema = invoiceInputSchema.extend({ id: z.string().min(1), number: z.string().optional(), subtotal: z.number().int().nonnegative(), total: z.number().int().nonnegative(), status: invoiceStatusSchema, version: z.number().int().positive(), revisions: z.array(z.object({ version: z.number().int().positive(), snapshot: z.unknown(), createdAt: z.string() })) });
+/** Progres pengerjaan pesanan klien (per nota terbit), diisi owner; entri terakhir = progres terkini. */
+export const orderProgressInputSchema = z.object({ note: z.string().trim().min(1, 'Catatan progres wajib diisi').max(300) });
+export const clientNoticeSchema = z.object({ status: z.enum(['sent', 'skipped', 'failed']), reason: z.string().max(200).optional() });
+export type ClientNotice = z.infer<typeof clientNoticeSchema>;
+// note opsional & percent dibiarkan agar entri lama (sebelum persen dihapus) tetap terbaca.
+export const orderProgressEntrySchema = z.object({ note: optionalText(300), percent: z.number().optional(), at: z.string(), clientNotice: clientNoticeSchema.optional() });
+export type OrderProgressEntry = z.infer<typeof orderProgressEntrySchema>;
+export const invoiceSchema = invoiceInputSchema.extend({ progress: z.array(orderProgressEntrySchema).max(50).optional(), id: z.string().min(1), number: z.string().optional(), subtotal: z.number().int().nonnegative(), total: z.number().int().nonnegative(), status: invoiceStatusSchema, version: z.number().int().positive(), revisions: z.array(z.object({ version: z.number().int().positive(), snapshot: z.unknown(), createdAt: z.string() })) });
 export type Invoice = z.infer<typeof invoiceSchema>;
 export type InvoiceInput = z.infer<typeof invoiceInputSchema>;
 export const paymentMethodSchema = z.enum(['cash', 'transfer', 'card', 'other']);

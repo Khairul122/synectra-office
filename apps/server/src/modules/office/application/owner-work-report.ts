@@ -1,8 +1,8 @@
-import type { Invoice, KanbanStatus, KanbanTask } from '@synectra/contracts';
+import type { ClientNotice, Invoice, KanbanStatus, KanbanTask } from '@synectra/contracts';
 import type { WhatsappService } from '../../whatsapp/application/whatsapp-service';
 import { getAppFirestore } from '../../../infrastructure/firestore';
-import { findOwnersByWhatsapp, getProfile, listClients, listOwnerWhatsapps } from '../../business/application/business-service';
-import { listInvoices } from '../../invoice/application/invoice-service';
+import { findOwnersByWhatsapp, getClient, getProfile, listClients, listOwnerWhatsapps } from '../../business/application/business-service';
+import { addInvoiceProgress, listInvoices, setProgressClientNotice } from '../../invoice/application/invoice-service';
 import { listPayments } from '../../payment/application/payment-service';
 import { listReceiptJobs } from '../../deliveries/application/receipt-jobs';
 import { getBoardSnapshot, transitionTask } from '../../kanban/application/kanban-service';
@@ -23,6 +23,18 @@ const isOpen = (task: KanbanTask) => OPEN_ORDER.includes(task.status);
 const issuedAt = (invoice: Invoice) => Date.parse(invoice.revisions.at(-1)?.createdAt ?? '') || 0;
 const ageDays = (fromMs: number, now: Date) => Math.floor((now.getTime() - fromMs) / DAY_MS);
 const chatIdFor = (phone: string) => `${phone}@s.whatsapp.net`;
+const latestProgress = (invoice: Invoice) => invoice.progress?.at(-1);
+const updatedAgo = (iso: string, now: Date) => { const days = ageDays(Date.parse(iso), now); return days <= 0 ? 'hari ini' : `${days} hari lalu`; };
+function progressText(invoice: Invoice, task: KanbanTask | undefined, now: Date) {
+  const latest = latestProgress(invoice);
+  const own = latest ? `${latest.note ?? '-'} (update ${updatedAgo(latest.at, now)})` : 'belum diisi';
+  return task ? `${own} · Tugas: ${STATUS_LABEL[task.status]}${task.blockedReason ? ` (${task.blockedReason})` : ''}` : own;
+}
+/** Pesanan tuntas = lunas dan tugasnya selesai (atau tidak ada tugas). */
+function orderDone(task: KanbanTask | undefined, remaining: number) {
+  if (remaining > 0) return false;
+  return !task || task.status === 'done' || task.status === 'archived';
+}
 
 type OwnerData = Awaited<ReturnType<typeof loadOwnerData>>;
 
@@ -49,9 +61,13 @@ export async function buildOwnerWorkReport(ownerId: string, now = new Date(), ti
   const orders = data.billed.flatMap(invoice => {
     const task = data.taskByInvoice.get(invoice.id);
     const left = data.remaining(invoice);
-    if (left === 0 && (!task || task.status === 'done' || task.status === 'archived')) return []; // pesanan tuntas
-    const progress = task ? `${STATUS_LABEL[task.status]}${task.blockedReason ? ` (${task.blockedReason})` : ''}` : 'belum ada tugas';
-    return [`• ${invoice.number ?? invoice.id} · ${data.clientOf(invoice)} · ${rupiah(invoice.total)}\n  Progres: ${progress} · Bayar: ${left === 0 ? 'lunas' : `sisa ${rupiah(left)}`}`];
+    if (orderDone(task, left)) return [];
+    return [`• ${invoice.number ?? invoice.id} · ${data.clientOf(invoice)} · ${rupiah(invoice.total)}\n  Progres: ${progressText(invoice, task, now)}\n  Bayar: ${left === 0 ? 'lunas' : `sisa ${rupiah(left)}`}`];
+  });
+  // Pesanan berjalan yang progresnya belum diisi sejak kemarin.
+  const staleOrders = data.billed.filter(invoice => {
+    const latest = latestProgress(invoice);
+    return !orderDone(data.taskByInvoice.get(invoice.id), data.remaining(invoice)) && (!latest || ageDays(Date.parse(latest.at), now) >= 1);
   });
   const open = data.board.tasks.filter(isOpen).sort((a, b) => OPEN_ORDER.indexOf(a.status) - OPEN_ORDER.indexOf(b.status) || b.priority - a.priority);
   const todos = open.map(task => `• [${STATUS_LABEL[task.status]}] ${task.title} — ${task.assignee ?? 'BELUM ADA PJ'} (${task.id})`);
@@ -61,6 +77,7 @@ export async function buildOwnerWorkReport(ownerId: string, now = new Date(), ti
   const attention = [
     open.some(task => task.status === 'blocked') && `${open.filter(task => task.status === 'blocked').length} tugas terhambat`,
     review.length && `${review.length} tugas menunggu review (terlama ±${oldestReview} hari)`,
+    staleOrders.length && `${staleOrders.length} pesanan belum diupdate progresnya sejak kemarin (${staleOrders.slice(0, 5).map(invoice => invoice.number ?? invoice.id).join(', ')})`,
     open.some(task => !task.assignee) && `${open.filter(task => !task.assignee).length} tugas belum punya penanggung jawab`,
     data.billed.some(invoice => data.remaining(invoice) > 0 && ageDays(issuedAt(invoice), now) >= OVERDUE_DAYS) && `piutang lewat ${OVERDUE_DAYS} hari — ketik "piutang"`
   ].filter((item): item is string => !!item);
@@ -95,8 +112,61 @@ async function buildInvoiceStatus(ownerId: string, number: string, now: Date) {
     ...header(data, `🧾 Status ${invoice.number ?? invoice.id}`, now), '',
     `Klien: ${data.clientOf(invoice)}`,
     `Total: ${rupiah(invoice.total)} · ${left === 0 ? 'Lunas' : `Sisa ${rupiah(left)}`} · terbit ${ageDays(issuedAt(invoice), now)} hari lalu`,
-    `Progres: ${task ? `${STATUS_LABEL[task.status]} — ${task.title}${task.blockedReason ? ` (${task.blockedReason})` : ''}` : 'belum ada tugas terkait'}`
+    `Progres: ${progressText(invoice, task, now)}`,
+    ...(invoice.progress?.length ? ['', '*Riwayat progres*', ...invoice.progress.slice(-5).reverse().map(entry => `• ${updatedAgo(entry.at, now)} — ${entry.note ?? '-'}`)] : [])
   ]);
+}
+
+async function updateProgress(ownerId: string, number: string, note: string) {
+  const invoice = (await listInvoices(ownerId)).find(item => item.number?.toLowerCase() === number.toLowerCase() || item.id === number);
+  if (!invoice || (invoice.status !== 'issued' && invoice.status !== 'paid')) return `Nota ${number} tidak ditemukan atau belum terbit.`;
+  const result = await recordOrderProgress(ownerId, invoice.id, { note: note.slice(0, 300) });
+  if (!result) return `Nota ${number} tidak ditemukan.`;
+  return `✅ Progres ${invoice.number ?? invoice.id} dicatat: ${note}.\n${CLIENT_NOTICE[result.client.status]}${result.client.reason ? ` (${result.client.reason})` : ''}`;
+}
+
+// ---- Kirim progres pesanan ke WA klien ----
+
+let clientWhatsapp: WhatsappService | null = null;
+/** Diset saat bootstrap; null = server tanpa WhatsApp (progres tetap tersimpan, tidak dikirim). */
+export function setClientProgressWhatsapp(whatsapp: WhatsappService | null) { clientWhatsapp = whatsapp; }
+
+const CLIENT_NOTICE: Record<ClientNotice['status'], string> = { sent: '📤 Terkirim ke WA klien.', skipped: 'Tidak dikirim ke klien.', failed: '⚠️ Gagal dikirim ke WA klien.' };
+
+function clientProgressMessage(input: { clientName: string; businessName?: string; number: string; project: string; note: string }) {
+  return [
+    `Halo Bapak/Ibu *${input.clientName}*, berikut update progres pesanan Anda:`,
+    `*${input.project}* (nota ${input.number})`,
+    input.note,
+    `Terima kasih${input.businessName ? ` — *${input.businessName}*` : ''}.`
+  ].join('\n');
+}
+
+/** Simpan progres pesanan lalu (opsional, default ya) kirim ke WA klien. Gagal kirim tidak membatalkan progres. */
+export async function recordOrderProgress(ownerId: string, invoiceId: string, input: { note: string; notifyClient?: boolean }) {
+  const invoice = await addInvoiceProgress(ownerId, invoiceId, { note: input.note });
+  if (!invoice) return null;
+  const entry = invoice.progress!.at(-1)!;
+  const client = await sendProgressToClient(ownerId, invoice, entry, input.notifyClient !== false);
+  if (client.status === 'failed') console.warn(`[progres-klien] ${invoice.number ?? invoice.id}: gagal kirim WA klien — ${client.reason ?? 'tanpa alasan'}`);
+  // Hasil kirim disimpan di entri agar terlihat di riwayat; gagal menyimpan catatan ini tidak membatalkan progres.
+  const updated = await setProgressClientNotice(ownerId, invoice.id, entry.at, client).catch(() => null);
+  return { invoice: updated ?? invoice, client };
+}
+
+async function sendProgressToClient(ownerId: string, invoice: Invoice, entry: { note?: string }, notify: boolean): Promise<ClientNotice> {
+  if (!notify) return { status: 'skipped', reason: 'tidak dicentang' };
+  const [client, profile] = await Promise.all([getClient(ownerId, invoice.clientId), getProfile(ownerId)]);
+  if (!client) return { status: 'failed', reason: 'klien tidak ditemukan' };
+  if (client.communicationPreference === 'email') return { status: 'skipped', reason: 'klien memilih email' };
+  if (!clientWhatsapp || clientWhatsapp.getPairStatus().status !== 'connected') return { status: 'failed', reason: 'WhatsApp kantor belum terhubung' };
+  const finish = beginStaffActivity(ownerId, 'communication', 'Mengirim progres pesanan ke klien');
+  try {
+    await clientWhatsapp.sendText(chatIdFor(client.phone), clientProgressMessage({ clientName: client.name, businessName: profile?.businessName, number: invoice.number ?? invoice.id, project: invoice.items.map(item => item.description).join(', '), note: entry.note ?? '' }));
+    return { status: 'sent' };
+  } catch (error) {
+    return { status: 'failed', reason: error instanceof Error ? error.message.slice(0, 120) : 'kirim gagal' };
+  } finally { finish(); }
 }
 
 async function completeTask(ownerId: string, query: string) {
@@ -108,8 +178,8 @@ async function completeTask(ownerId: string, query: string) {
   return `✅ "${done.title}" ditandai ${STATUS_LABEL[done.status].toLowerCase()}.`;
 }
 
-const OWNER_COMMAND = /^(list kerjaan|piutang|bantuan|help|menu|status \S|selesai \S)/i;
-const HELP = ['Perintah WA owner:', '• list kerjaan — pesanan berjalan & todo', '• piutang — nota belum lunas', '• status <no nota> — progres satu pesanan', '• selesai <ID/judul tugas> — tandai tugas selesai', '• bantuan — daftar perintah'].join('\n');
+const OWNER_COMMAND = /^(list kerjaan|piutang|bantuan|help|menu|status \S|selesai \S|progres \S)/i;
+const HELP = ['Perintah WA owner:', '• list kerjaan — pesanan berjalan & todo', '• piutang — nota belum lunas', '• status <no nota> — progres & riwayat satu pesanan', '• progres <no nota> <catatan> — update progres harian, cth: progres INV-202611-000001 desain disetujui','• selesai <ID/judul tugas> — tandai tugas selesai', '• bantuan — daftar perintah'].join('\n');
 
 /** Jawaban untuk perintah owner, atau null bila pesan bukan perintah (diabaikan). */
 export async function handleOwnerCommand(ownerId: string, body: string, now = new Date()): Promise<string | null> {
@@ -119,6 +189,8 @@ export async function handleOwnerCommand(ownerId: string, body: string, now = ne
   if (/^piutang$/i.test(text)) return buildReceivables(ownerId, now);
   if (/^(bantuan|help|menu)$/i.test(text)) return HELP;
   if ((match = text.match(/^status (.+)$/i))) return buildInvoiceStatus(ownerId, match[1]!, now);
+  if (/^progres \S+$/i.test(text)) return 'Tulis catatannya juga, cth: progres INV-202611-000001 desain disetujui';
+  if ((match = text.match(/^progres (\S+) (.+)$/i))) return updateProgress(ownerId, match[1]!, match[2]!);
   if ((match = text.match(/^selesai (.+)$/i))) return completeTask(ownerId, match[1]!);
   return null;
 }

@@ -302,3 +302,31 @@
 @media (prefers-reduced-motion: reduce) {
   .tablet-screen * { transition: none !important; }
 }
+
+/* ---------- Daftar pesanan di halaman Progres: seluruh kartu = satu tombol ---------- */
+.tablet-screen[data-app] .tablet-content .finance-panel ul.progress-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.tablet-screen[data-app] .tablet-content .finance-panel ul.progress-list > li { display: block; margin: 0; padding: 0 !important; border: 0 !important; border-radius: 0 !important; background: none !important; }
+.tablet-screen[data-app] .tablet-content .finance-panel ul.progress-list > li > button.progress-item {
+  display: grid; justify-content: stretch; align-items: start; gap: 6px; width: 100%; min-height: 0; margin: 0; padding: 14px 18px;
+  border: 1px solid var(--line); border-radius: 16px; background: var(--surface); color: var(--ink-2); font-size: 13px; font-weight: 400; text-align: left;
+}
+.tablet-screen[data-app] .tablet-content .finance-panel ul.progress-list > li > button.progress-item:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.tablet-screen[data-app] .tablet-content .progress-item-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.tablet-screen[data-app] .tablet-content .progress-item-head strong { color: var(--ink); font-size: 14px; font-weight: 650; }
+.tablet-screen[data-app] .tablet-content .progress-item-head span { flex: none; color: var(--ink-3); font-size: 12px; white-space: nowrap; }
+
+.tablet-screen[data-app] .tablet-content .progress-form label.order-progress-notify { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--canvas); cursor: pointer; }
+.tablet-screen[data-app] .tablet-content .progress-form label.order-progress-notify input { flex: none; width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--accent-strong); }
+.tablet-screen[data-app] .tablet-content .progress-form label.order-progress-notify strong { color: var(--ink); }
+.tablet-screen[data-app] .tablet-content .progress-form label.order-progress-notify small { color: var(--ink-3); font-size: 12px; font-weight: 400; }
+.tablet-screen[data-app] .tablet-content .progress-form > button[type="submit"] { justify-self: start; min-width: 180px; }
+
+/* Riwayat progres: kartu per entri, terbaru di atas */
+.tablet-screen[data-app] .tablet-content .progress-history { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.tablet-screen[data-app] .tablet-content .progress-history > li { display: grid; gap: 6px; margin: 0; padding: 14px 16px; border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 12px; background: var(--surface); }
+.tablet-screen[data-app] .tablet-content .progress-history time { color: var(--ink-3); font-size: 12.5px; }
+.tablet-screen[data-app] .tablet-content .progress-history p { margin: 0; color: var(--ink-2); font-size: 14px; line-height: 1.5; white-space: pre-line; }
+.tablet-screen[data-app] .tablet-content .progress-history p.is-empty { color: var(--ink-3); font-style: italic; }
+.tablet-screen[data-app] .tablet-content .progress-history-notice { justify-self: start; padding: 3px 10px; border-radius: 999px; background: var(--canvas); color: var(--ink-2); font-size: 12px; font-weight: 600; }
+.tablet-screen[data-app] .tablet-content .progress-history-notice.is-sent { background: color-mix(in srgb, var(--ok-ink, #1f7a4d) 12%, transparent); color: var(--ok-ink, #1f7a4d); }
+.tablet-screen[data-app] .tablet-content .progress-history-notice.is-failed { background: color-mix(in srgb, var(--danger-ink, #b42318) 12%, transparent); color: var(--danger-ink, #b42318); }

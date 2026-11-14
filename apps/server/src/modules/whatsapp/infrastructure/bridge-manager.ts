@@ -345,7 +345,8 @@ export class BridgeManager {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chatId, message }),
-      signal: AbortSignal.timeout(15000)
+      // Pesan pertama ke kontak baru bisa lambat (sinkron perangkat penerima); bridge sendiri menunggu hingga 60 detik.
+      signal: AbortSignal.timeout(65000)
     });
     const data = (await res.json()) as any;
     if (!res.ok || !data.success) throw new Error(data.error || `Send failed with status ${res.status}`);

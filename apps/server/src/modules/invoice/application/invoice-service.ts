@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { invoiceInputSchema, invoiceSchema, type Invoice, type InvoiceInput } from '@synectra/contracts';
+import { invoiceInputSchema, invoiceSchema, orderProgressInputSchema, type Invoice, type InvoiceInput } from '@synectra/contracts';
 import { getAppFirestore } from '../../../infrastructure/firestore';
 import { getClient } from '../../business/application/business-service';
 
@@ -71,6 +71,46 @@ export async function getInvoice(ownerId: string, id: string) {
   if (!useFirestore) { const invoice = ownerInvoices(ownerId).get(id); return invoice ? structuredClone(invoice) : null; }
   const snapshot = await invoiceRef(ownerId, id).get();
   return snapshot.exists ? invoiceSchema.parse(snapshot.data()) : null;
+}
+/** Tambah entri progres pesanan pada nota terbit. Tidak menaikkan versi nota (isi nota & PDF tidak berubah). */
+export async function addInvoiceProgress(ownerId: string, id: string, input: unknown): Promise<Invoice | null> {
+  const entry = { ...orderProgressInputSchema.parse(input), at: new Date().toISOString() };
+  const apply = (current: Invoice): Invoice => {
+    if (current.status !== 'issued' && current.status !== 'paid') throw new Error('Progres hanya bisa diisi pada nota terbit.');
+    return { ...current, progress: [...(current.progress ?? []), entry].slice(-50) };
+  };
+  if (useFirestore) {
+    return getAppFirestore().runTransaction(async tx => {
+      const snapshot = await tx.get(invoiceRef(ownerId, id));
+      if (!snapshot.exists) return null;
+      const next = apply(invoiceSchema.parse(snapshot.data()));
+      tx.update(invoiceRef(ownerId, id), { progress: next.progress });
+      return next;
+    });
+  }
+  const current = ownerInvoices(ownerId).get(id);
+  if (!current) return null;
+  const next = apply(current);
+  ownerInvoices(ownerId).set(id, next);
+  return structuredClone(next);
+}
+/** Catat hasil kirim WA klien pada entri progres yang sudah ada (dicocokkan lewat waktu `at`). */
+export async function setProgressClientNotice(ownerId: string, id: string, at: string, clientNotice: { status: 'sent' | 'skipped' | 'failed'; reason?: string }): Promise<Invoice | null> {
+  const apply = (current: Invoice): Invoice => ({ ...current, progress: (current.progress ?? []).map(entry => entry.at === at ? { ...entry, clientNotice } : entry) });
+  if (useFirestore) {
+    return getAppFirestore().runTransaction(async tx => {
+      const snapshot = await tx.get(invoiceRef(ownerId, id));
+      if (!snapshot.exists) return null;
+      const next = apply(invoiceSchema.parse(snapshot.data()));
+      tx.update(invoiceRef(ownerId, id), { progress: next.progress });
+      return next;
+    });
+  }
+  const current = ownerInvoices(ownerId).get(id);
+  if (!current) return null;
+  const next = apply(current);
+  ownerInvoices(ownerId).set(id, next);
+  return structuredClone(next);
 }
 export async function updateDraftInvoice(ownerId: string, id: string, expectedVersion: number, input: unknown) {
   const next = build(id, parsedInput(input), expectedVersion + 1);

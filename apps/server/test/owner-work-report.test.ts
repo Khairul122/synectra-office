@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createClient, resetBusinessDataForTests, saveProfile } from '../src/modules/business/application/business-service';
+import { createClient, resetBusinessDataForTests, saveProfile, updateClient } from '../src/modules/business/application/business-service';
 import { createIssuedInvoice, resetInvoiceDataForTests } from '../src/modules/invoice/application/invoice-service';
 import { resetKanbanDataForTests, setHermesCliRunnerForTests } from '../src/modules/kanban/application/kanban-service';
-import { createOwnerCommandWorker, handleOwnerCommand, runOwnerAlerts, runOwnerDailyReport } from '../src/modules/office/application/owner-work-report';
+import { createOwnerCommandWorker, handleOwnerCommand, recordOrderProgress, runOwnerAlerts, runOwnerDailyReport, setClientProgressWhatsapp } from '../src/modules/office/application/owner-work-report';
 import { getStaffSnapshot } from '../src/modules/office/application/staff-activity';
 import type { WhatsappService } from '../src/modules/whatsapp/application/whatsapp-service';
 import { hermesTenantFor } from '../src/infrastructure/hermes-cli';
@@ -94,4 +94,47 @@ test('laporan pagi terkirim ke No. WA owner', async () => {
   assert.equal(result.isChanged, true);
   assert.equal(sent[0]!.chatId, `${OWNER_PHONE}@s.whatsapp.net`);
   assert.match(sent[0]!.text, /^☀️ Laporan pagi Toko Uji/);
+});
+
+test('progres pesanan harian: isi via WA, tampil di laporan & status, pengingat bila belum diupdate', async () => {
+  const ownerId = 'owner-wa-progress';
+  const { invoice } = await setup(ownerId);
+
+  assert.match((await handleOwnerCommand(ownerId, 'list kerjaan'))!, /Progres: belum diisi\n[\s\S]*1 pesanan belum diupdate progresnya/);
+  assert.match((await handleOwnerCommand(ownerId, `progres ${invoice.number} desain disetujui`))!, /✅ Progres .* dicatat: desain disetujui/);
+  assert.match((await handleOwnerCommand(ownerId, `progres ${invoice.number}`))!, /Tulis catatannya/);
+
+  const today = (await handleOwnerCommand(ownerId, 'list kerjaan'))!;
+  assert.match(today, /Progres: desain disetujui \(update hari ini\)/);
+  assert.doesNotMatch(today, /belum diupdate progresnya/);
+
+  const twoDaysLater = new Date(Date.now() + 2 * 86_400_000);
+  assert.match((await handleOwnerCommand(ownerId, 'list kerjaan', twoDaysLater))!, /update 2 hari lalu[\s\S]*1 pesanan belum diupdate progresnya/);
+  assert.match((await handleOwnerCommand(ownerId, `status ${invoice.number}`))!, /Riwayat progres\*\n• hari ini — desain disetujui/);
+});
+
+test('progres otomatis terkirim ke WA klien; bisa dilewati, hormati preferensi email, gagal kirim tidak menghapus progres', async () => {
+  const ownerId = 'owner-progress-client';
+  const { invoice, sent, whatsapp } = await setup(ownerId);
+  setClientProgressWhatsapp(whatsapp);
+  try {
+    const viaWa = (await handleOwnerCommand(ownerId, `progres ${invoice.number} sudah dikirim`))!;
+    assert.match(viaWa, /📤 Terkirim ke WA klien/);
+    assert.equal(sent.at(-1)!.chatId, '6289876543210@s.whatsapp.net');
+    assert.match(sent.at(-1)!.text, /Bapak\/Ibu \*Klien Uji\*[\s\S]*\*Jasa\* \(nota INV-[\d-]+\)\nsudah dikirim\nTerima kasih — \*Toko Uji\*/);
+
+    const count = sent.length;
+    assert.equal((await recordOrderProgress(ownerId, invoice.id, { note: 'cetak', notifyClient: false }))!.client.status, 'skipped');
+    assert.equal(sent.length, count);
+
+    await updateClient(ownerId, invoice.clientId, { name: 'Klien Uji', phone: '6289876543210', communicationPreference: 'email' });
+    assert.deepEqual((await recordOrderProgress(ownerId, invoice.id, { note: 'finishing' }))!.client, { status: 'skipped', reason: 'klien memilih email' });
+
+    await updateClient(ownerId, invoice.clientId, { name: 'Klien Uji', phone: '6289876543210' });
+    whatsapp.getPairStatus = () => ({ status: 'unpaired' });
+    const failed = (await recordOrderProgress(ownerId, invoice.id, { note: 'packing' }))!;
+    assert.equal(failed.client.status, 'failed');
+    assert.equal(failed.invoice.progress!.at(-1)!.note, 'packing', 'progres tetap tersimpan');
+    assert.deepEqual(failed.invoice.progress!.at(-1)!.clientNotice, { status: 'failed', reason: 'WhatsApp kantor belum terhubung' }, 'hasil kirim tercatat di riwayat');
+  } finally { setClientProgressWhatsapp(null); }
 });

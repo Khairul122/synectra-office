@@ -1,6 +1,7 @@
 export const tabletApps = [
   { id: 'dashboard', label: 'Dashboard', icon: 'grid' },
   { id: 'payments', label: 'Pembayaran', icon: 'payment' },
+  { id: 'progress', label: 'Progres', icon: 'board' },
   { id: 'admin', label: 'Nota', icon: 'note' },
   { id: 'archive', label: 'Klien & arsip', icon: 'user' },
   { id: 'board', label: 'Kanban', icon: 'board' },

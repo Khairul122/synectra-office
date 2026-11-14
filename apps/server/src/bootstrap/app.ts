@@ -14,6 +14,7 @@ import { registerDeliveryRoutes } from '../modules/deliveries/presentation/deliv
 import { registerOfficeRoutes } from '../modules/office/presentation/office-route';
 import { setOfficeStatusStore } from '../modules/office/application/office-event-service';
 import { createOfficeStatusStore } from '../modules/office/infrastructure/office-status-store';
+import { setClientProgressWhatsapp } from '../modules/office/application/owner-work-report';
 import { registerHermesRoutes } from '../modules/hermes/presentation/hermes-route';
 import { runStaffEvaluation, setHermesModelClient, setHermesStore } from '../modules/hermes/application/hermes-service';
 import { setHermesAgentRunner, STAFF_EVALUATION_SCRIPT } from '../modules/hermes/application/hermes-agent';
@@ -131,6 +132,7 @@ export function buildApp(opts?: {
   registerPaymentRoutes(app, opts?.onReceiptQueued);
   registerPdfRoutes(app);
   registerDeliveryRoutes(app, opts?.whatsappService);
+  setClientProgressWhatsapp(opts?.whatsappService ?? null);
   setOfficeStatusStore(createOfficeStatusStore());
   registerOfficeRoutes(app);
   setHermesStore(createHermesStore());

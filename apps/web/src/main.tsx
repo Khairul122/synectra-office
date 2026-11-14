@@ -553,6 +553,7 @@ function App() {
     userEmail={userEmail}
     onLogout={handleLogout}
     dashboardPanel={<FinancePanel mode="dashboard" csrfToken={csrfToken} onChanged={() => { fetchInvoices(); fetchAllPayments(); }} />}
+    progressPanel={<FinancePanel mode="progress" csrfToken={csrfToken} onChanged={() => { fetchInvoices(); }} />}
     paymentPanel={<FinancePanel mode="payments" csrfToken={csrfToken} onChanged={() => { fetchInvoices(); fetchAllPayments(); }} />}
     signaturePanel={<SignaturePanel csrfToken={csrfToken} onSaved={() => { setSignatureData(''); if (signatureFileRef.current) signatureFileRef.current.value = ''; }} />}
     hermesPanel={

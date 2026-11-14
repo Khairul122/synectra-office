@@ -217,6 +217,23 @@ textarea:focus-visible { outline: 2px solid #81bd94; outline-offset: 3px; }
 .finance-form { display: grid; gap: 12px; }
 .finance-list { display: grid; gap: 10px; padding: 0; list-style: none; }
 .finance-list li { display: grid; gap: 6px; margin: 0; padding: 14px; border: 1px solid #45504b; border-radius: 8px; }
+.order-progress { display: grid; gap: 4px; }
+.order-progress-form summary { cursor: pointer; color: #9fd4c2; font-size: 13px; font-weight: 600; }
+.order-progress-form .finance-form { margin-top: 8px; }
+label.order-progress-notify, .tablet-screen[data-app] .tablet-content label.order-progress-notify { display: flex; align-items: flex-start; gap: 10px; grid-column: 1 / -1; cursor: pointer; }
+label.order-progress-notify input { flex: none; width: 18px; height: 18px; margin-top: 2px; }
+label.order-progress-notify span { display: grid; gap: 2px; }
+label.order-progress-notify small { font-weight: 400; opacity: .8; }
+.progress-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.progress-item { display: grid; gap: 6px; width: 100%; padding: 14px; border: 1px solid var(--line, #45504b); border-radius: 10px; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.progress-item:hover, .progress-item:focus-visible { border-color: #2f6f5c; }
+.progress-item-head { display: flex; justify-content: space-between; gap: 8px; }
+.progress-item-project, .progress-item-meta { font-size: 13px; opacity: .8; }
+.progress-detail { display: grid; gap: 12px; }
+.progress-back { justify-self: start; }
+.progress-toolbar { display: grid; gap: 10px; margin-bottom: 12px; }
+
+.order-progress-history { display: grid; gap: 4px; margin: 8px 0 0; padding-left: 18px; color: #c8d0cd; font-size: 12.5px; }
 .finance-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .finance-actions button, .finance-form > button { min-height: 40px; padding: 9px 13px; border: 1px solid #a5c8a6; border-radius: 7px; background: #e8f2df; color: #214c34; font-size: 13px; font-weight: 700; }
 .finance-actions .secondary-button { color: #f1f5f2; background: #242827; border-color: #626967; }
@@ -326,7 +343,7 @@ textarea:focus-visible { outline: 2px solid #81bd94; outline-offset: 3px; }
 .tablet-app-grid button { display: flex; flex-direction: column; align-items: center; gap: 7px; min-width: 0; padding: 4px; border: 0; background: transparent; color: #24334c; font: 600 12px/1.2 'Segoe UI', sans-serif; text-align: center; cursor: pointer; }
 .tablet-app-icon { display: grid; place-items: center; width: 52px; height: 52px; flex: none; border-radius: 18px; color: #fff; background: #5c7ee5; box-shadow: 0 5px 12px #34496c30; }
 .tablet-app-icon svg { width: 25px; height: 25px; stroke-width: 1.8; }
-.app-payments, .app-communication { background: #42a882; }.app-admin, .app-printer { background: #ed9875; }.app-archive, .app-hermes { background: #a579d6; }.app-board, .app-signature { background: #668cdd; }.app-calendar { background: #e87984; }
+.app-payments, .app-communication { background: #42a882; }.app-admin, .app-printer { background: #ed9875; }.app-archive, .app-hermes { background: #a579d6; }.app-board, .app-signature { background: #668cdd; }.app-calendar { background: #e87984; }.app-progress { background: #d9a441; }
 .tablet-nav { flex: 0 0 auto; align-self: center; flex-direction: row; align-items: center; max-width: calc(100% - 24px); max-height: none; overflow-x: auto; overflow-y: hidden; gap: 4px; margin: 0 12px 10px; padding: 5px 8px; border: 1px solid #ffffffd9; border-radius: 24px; background: #e4eaf4dd; box-shadow: 0 4px 18px #40506a1a; }
 .tablet-nav button { flex: 0 0 43px; width: 43px; min-height: 43px; border-radius: 14px; color: #354866; }
 .tablet-nav button:hover, .tablet-nav button.active { background: #ffffffa8; color: #26466f; }
